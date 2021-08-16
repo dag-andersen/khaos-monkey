@@ -84,7 +84,7 @@ async fn start() -> Result<(), Box<dyn Error>> {
 	let min_time_between_chaos = parse_duration(&opt.min_time_between_chaos).expect("Failed to parse min_time_between_chaos");
 	let random_extra_time_between_chaos = parse_duration(&opt.random_extra_time_between_chaos).expect("Failed to parse random_time_between_chaos");
 
-	let mode = DeleteMode::from_str(&opt.mode).expect("msg");
+	let mode = DeleteMode::from_str(&opt.mode).expect("`mode` not valid. Run with `--help` for more info.");
 	let random = opt.random_kill_count;
 	let value = opt.kill_value;
 	let num_attacks = if opt.attacks_per_interval > -1 {
@@ -97,12 +97,12 @@ async fn start() -> Result<(), Box<dyn Error>> {
 	let client = Client::try_default().await?;
 
 	let pod_api: Api<Pod> = Api::all(client.clone());
-	let accepted_namespaces: HashSet<String> = get_accepted_namespaces(opt, &client).await?;
+	let targeted_namespace: HashSet<String> = get_targeted_namespace(opt, &client).await?;
 
 	loop {
 		println!("###################");
 		println!("### Chaos Beginning");
-		for (khaos_key, pods) in get_grouped_pods(&pod_api, &accepted_namespaces).await?.iter().take(num_attacks as usize) {
+		for (khaos_key, pods) in get_grouped_pods(&pod_api, &targeted_namespace).await?.iter().take(num_attacks as usize) {
 			let pods_to_delete = match mode {
 				DeleteMode::Fixed => value as f32,
 				DeleteMode::Percentage => (pods.len() * value) as f32 / 100.0,
@@ -135,7 +135,7 @@ async fn start() -> Result<(), Box<dyn Error>> {
 	}
 }
 
-async fn get_accepted_namespaces(opt: Opt, client: &Client) -> Result<HashSet<String>, Box<dyn Error>> {
+async fn get_targeted_namespace(opt: Opt, client: &Client) -> Result<HashSet<String>, Box<dyn Error>> {
 
 	let namespace_api: Api<Namespace> = Api::all(client.clone());
 
@@ -159,12 +159,13 @@ async fn get_accepted_namespaces(opt: Opt, client: &Client) -> Result<HashSet<St
 	Ok(accepted_namespaces)
 }
 
-async fn get_grouped_pods(pods: &Api<Pod>, allowed_namespaces: &HashSet<String>) -> Result<HashMap<String, Vec<Pod>>, Box<dyn Error>> {
+async fn get_grouped_pods(pods: &Api<Pod>, targeted_namespace: &HashSet<String>) -> Result<HashMap<String, Vec<Pod>>, Box<dyn Error>> {
 	let mut map: HashMap<String, Vec<Pod>> = HashMap::new();
-	for p in pods.list(&ListParams::default()).await? {
-		let in_namespace = allowed_namespaces.contains(&p.namespace().unwrap_or_default());
-		let labels = p.labels();
-		match (labels.get("khaos-enabled"), in_namespace) {
+	for pod in pods.list(&ListParams::default()).await? {
+		let in_targeted_namespace = targeted_namespace.contains(&pod.namespace().unwrap_or_default());
+		let labels = pod.labels();
+		
+		match (labels.get("khaos-enabled"), in_targeted_namespace) {
 			(None, false) => continue,
 			(Some(khaos), false) if khaos != "true" => continue,
 			(Some(khaos), _) if khaos == "false" => continue,
@@ -173,20 +174,19 @@ async fn get_grouped_pods(pods: &Api<Pod>, allowed_namespaces: &HashSet<String>)
 
 		let khaos_group = labels
 			.get("khaos-group")
-			.map(|x| String::from(x))
-			.or(labels.iter().find(|x| x.0.contains("pod-template-hash")).map(|x| format!("{}={}", *x.0, *x.1)));
-
-		if let Some(kg) = khaos_group {
-			match map.get_mut(&kg) {
-				Some(v) => {
-					v.insert(0, p);
-				}
+			.map(|l| String::from(l))
+			.or(labels.iter().find(|l| l.0.contains("pod-template-hash")).map(|l| format!("{}={}", *l.0, *l.1)));
+		
+		if let Some(group) = khaos_group {
+			match map.get_mut(&group) {
+				Some(v) => v.insert(0, pod),
 				None => {
-					map.insert(kg.to_string(), vec![p]);
+					map.insert(group.to_string(), vec![pod]);
 				}
 			}
 		};
 	}
+
 	Ok(map)
 }
 
