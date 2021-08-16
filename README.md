@@ -1,4 +1,4 @@
-![](./images/khaos-monkey-01.png)
+![](./images/khaos-monkey-02.png)
 
 # khaos-monkey - A simple Chaos Monkey for Kubernetes
 Built on top of [kube-rs](https://github.com/kube-rs/kube-rs)
@@ -14,6 +14,24 @@ Read about Chaos Engineering
 
 By default all pods in a replicaset is grouped. So if a Deployment has 4 replicas the monkey may kill 1 of those replicas. 
 You can make a custom group by adding an annothatuion to the pods - e.g. `khaos-group=my-group`. This would make the make the monkey treat your custom group the way it treats a replicaset. 
+
+*deployment example*:
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: whatever-deployment
+spec:
+  replicas: 4
+  template:
+    spec:
+      metadata:
+        labels:
+          khaos-group: my-group
+      containers:
+      - name: whatever-container
+        image: whatever-image
+```
 
 ## Targeting based on namespaces
 
@@ -44,14 +62,22 @@ spec:
 
 *Opt-in cronjob example*:
 ```yaml
-apiVersion: apps/v1
-kind: Cronjob  something 
+apiVersion: batch/v1
+kind: CronJob
 metadata:
-  name: whatever-deployment
+  name: whatever-cronjob
 spec:
-  template:
+  schedule: "*/1 * * * *"
+  jobTemplate:
     spec:
-... . . . . ..  . . ..  . ... ..  ... .
+      template:
+        metadata:
+          labels:
+            khaos-enabled: "true"
+        spec:
+          containers:
+          - name: whatever-container
+            image: whatever-image
 ```
 
 ## Opt-out
@@ -73,7 +99,7 @@ spec:
         labels:
           khaos-enabled: "false"
       containers:
-      - name: echo-client
+      - name: whatever-container
         image: whatever-image
 ```
 
@@ -107,17 +133,16 @@ $ kubectl create namespace khaos-monkey
 ```
 ### Create the right permission with rbac:
 
-Either by referering to the repo file:
+Either by referring to the repo file:
 ```bash
 $ kubectl apply 
 ```
-or run:
+or copy-paste and run this in your terminal:
 ```yaml
 cat <<EOF | kubectl apply -f -
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  namespace: default
   name: khaos-monkey-cluster-role
 rules:
 - apiGroups: ["*"]
@@ -131,11 +156,12 @@ metadata:
 subjects:
 - kind: ServiceAccount
   name: default
-  namespace: default
+  namespace: khaos-monkey
 roleRef:
   kind: ClusterRole
   name: khaos-monkey-cluster-role
   apiGroup: ""
+EOF
 ```
 
 ### Deploy the monkey.
@@ -146,43 +172,37 @@ Either by referering to the repo file:
 ```bash
 $ kubectl apply -f  
 ```
-or run:
+or copy-paste and run this in your terminal:
 
 ```yaml
 cat <<EOF | kubectl apply -f -
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: khaos-monkey-deployment
+  namespace: khaos-monkey
+  name: khaos-monkey
 spec:
-  minReadySeconds: 15
   replicas: 1
+  selector:
+    matchLabels:
+      app: khaos-monkey
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
         khaos-enabled: "false"
+        app: khaos-monkey
     spec:
       containers:
       - name: khaos-monkey
-        image: dagandersen/khaos-monkey:latest
-        resources:
-          requests:
-            cpu: "0"
-            memory: "0"
-          limits:
-            cpu: "250m"
-            memory: "1Gi"
-        env:
-          - name: attacks-per-interval
-            value: "1"
+        image: dagandersen/khaos-monkey:111
 EOF
 ```
 
 # All CLI Options
 
-```bash
+```
 khaos-monkey 0.1.0
 
 USAGE:

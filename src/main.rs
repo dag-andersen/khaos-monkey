@@ -77,9 +77,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 }
 
 async fn start() -> Result<(), Box<dyn Error>> {
-	println!("Starting");
-
 	let opt = Opt::from_args();
+	
+	println!("Starting");
 
 	let min_time_between_chaos = parse_duration(&opt.min_time_between_chaos).expect("Failed to parse min_time_between_chaos");
 	let random_extra_time_between_chaos = parse_duration(&opt.random_extra_time_between_chaos).expect("Failed to parse random_time_between_chaos");
@@ -175,7 +175,8 @@ async fn get_grouped_pods(pods: &Api<Pod>, targeted_namespace: &HashSet<String>)
 		let khaos_group = labels
 			.get("khaos-group")
 			.map(|l| String::from(l))
-			.or(labels.iter().find(|l| l.0.contains("pod-template-hash")).map(|l| format!("{}={}", *l.0, *l.1)));
+			.or(labels.iter().find(|l| l.0.contains("pod-template-hash")).map(|l| format!("{}={}", *l.0, *l.1)))
+			.or(labels.iter().find(|l| l.0 == "job-name").map(|l| format!("{}={}", *l.0, *l.1)));
 		
 		if let Some(group) = khaos_group {
 			match map.get_mut(&group) {
