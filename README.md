@@ -8,26 +8,24 @@ Built on top of [kube-rs](https://github.com/kube-rs/kube-rs)
 
 Read about Chaos Engineering
 
-# Features
+# How is this monkey different from similar tools?
 
-## Target Grouping
+I created this tools because the tools i found didnt fit my use-case very well. Other tools like [kube-monkey](https://github.com/asobti/kube-monkey) forces you to add labels to every single resource you want the chaos monkey to target. This tool takes another approach and focuses on having equal rules for all pods in a given namespace.
 
 # 3 Modes
 
-The the usage of the option `kill-value` all depends on what mode the monkey is using.
-
-## `percentage`
+### `percentage`
 The monkey will kill a given percentage of targeted pods. The number is rounded down.
 
-*Example*: if you set the `kill-value` to `55` and your `ReplicaSet` has 4 pods the monkey will kill 2 random pods on every attack.
-## `fixed`
+*Example*: if you run the monkey with  `--mode=percentage --kill-value=55` and your `ReplicaSet` has 4 pods the monkey will kill 2 random pods on every attack.
+### `fixed`
 If set to `fixed` they will kill a fixed number (`kill-value`) of pods each type.
 
-*Example*: if you set the `kill-value` to `3` and your `ReplicaSet` has 5 pods the monkey will kill 3 random pods on every attack.
-## `fixed_left`
+*Example*: if you run the monkey with  `--mode=fixed --kill-value=3` and your `ReplicaSet` has 5 pods the monkey will kill 3 random pods on every attack.
+### `fixed_left`
 If set to `fixed_left` they will kill all pod types until there is `kill-value` pods left.
 
-*Example*: if you set the `kill-value` to `3` and your `ReplicaSet` has 5 pods the monkey will pods until there is 3 left. In this case it would kill 2 pods.
+*Example*: if you run the monkey with `--mode=fixed_left --kill-value=3` and your `ReplicaSet` has 5 pods the monkey will pods until there is 3 left. In this case it would kill 2 pods.
 
 # Pod Targeting
 
@@ -35,9 +33,11 @@ If set to `fixed_left` they will kill all pod types until there is `kill-value` 
 
 The monkey can either target individual pods or whole namespaces. If the option `--target-namespaces` is set to `"namespaceA, namespaceB"` the monkey will target all pods in those two namespaces. This means that the monkey may kill any pod (unless they [opt-out](#Opt-out)) in those namespaces.
 
+> *Example*: If you run the monkey with `--target-namespaces="namespaceA,namespaceB"` it will target all pods in `namespaceA` and `namespaceB`.
+
 ## Opt-in
 
-This feature means you can make the monkey target individual pod in any namespace by adding the label `khaos-enabled: true` to to the pod. If this label exist on a pod it doesn't matter if it inside in the namespaces specified by `--target-namespaces` or not. 
+This feature means you can make the monkey target individual pod in any namespace by adding the label `khaos-enabled: "true"` to to the pod. If this label exist on a pod it doesn't matter if it inside in the namespaces specified by `--target-namespaces` or not. 
 
 *Opt-in deployment example*:
 ```yaml
@@ -84,7 +84,7 @@ spec:
 By default all pods in a `ReplicaSet` is grouped. So if a `Deployment` has `4` replicas the monkey may kill *x* pods of those replicas. 
 You can make a custom group by adding a label to the pods - e.g. `khaos-group=my-group`. This would make the monkey treat your custom group the same way it treats a `ReplicaSet`. 
 
-> *Example*: Lets say that deployment `depA` has 2 pods/replicas and deployment `depB` has 1 pod/replicas and all 3 pods/replicas has the label `khaos-group=my-group`. The monkey is set to `--mode=fixed --kill-value=2`. In this case the monkey will kill either 2 pods of `depA`' pods or 1 pod from each deployment, since they are treaded as being in the same group.
+> *Example*: Lets say that deployment `depA` has 2 pods/replicas and deployment `depB` has 1 pod/replicas and all 3 pods/replicas has the label `khaos-group=my-group`. The monkey is set to `--mode=fixed --kill-value=2`. In this case the monkey will kill either 2 pods of `depA`' pods or 1 pod from each deployment, since they are treated as being in the same group.
 
 *deployment example*:
 ```yaml
@@ -105,6 +105,12 @@ spec:
         image: whatever-image
 ```
 
+## Blacklisting namespaces
+
+You can specify namespaces where it is not possible to [opt-in](#opt-in).
+
+> *Example*: If you want the monkey with `--blacklisted-namespace="whatever"` it is not possible for pods to [opt-in](#opt-in) in namespace `"whatever"`.
+
 # Randomness
 
 You can randomize how often the attack happens and how many pods are killed each attack.
@@ -120,7 +126,7 @@ You can set `random-extra-time-between-chaos` to `5m` if you want you want to ad
 By default it does not target any namespaces, so it won't start killing pods until you specify namespaces to target or you make pods opt-in. 
 
 # Running/Testing on local machine
-You can test the monkey on your local machine before putting it on kubernetes. If you have your kube-config installed in `~/.kube/config` and have `cargo` installed then you can just pull the repo to you machine and run `cargo run` in the root. If your config and permissions are correct the monkey will starting killing pods on the current `kubectl` context.
+You can test the monkey on your local machine before putting it on kubernetes. If you have your kube-config installed in `~/.kube/config` and have `cargo` installed then you can just pull the repo and run `cargo run -- --target-namespaces="my-namespace"` in the root. If your config and permissions are correct the monkey will starting killing pods in namespace, "my-namespace", on the current `kubectl` context.
 
 # Installation
 
