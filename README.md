@@ -16,21 +16,28 @@ Read about Chaos Engineering
 
 The the usage of the option `kill-value` all depends on what mode the monkey is using.
 
-* `percentage` - The monkey will kill a given percentage of targeted pods. (The number is rounded down). Example: if you set the `kill-value` to `55` and your replicaset has 4 pods the monkey will kill 2 random pods on every attack.
-* `fixed` - If sat to `fixed` they will kill a fixed number (`kill-value`) of pods each type. Example: if you set the `kill-value` to `3` and your replicaset has 5 pods the monkey will kill 3 random pods on every attack.
-* `fixed_left` - If sat to `fixed_left` they will kill all pod types until there is `kill-value` pods left. Example: if you set the `kill-value` to `3` and your replicaset has 5 pods the monkey will pods until there is 3 left. In this case it would kill 2 pods.
+## `percentage`
+The monkey will kill a given percentage of targeted pods. The number is rounded down.
+
+*Example*: if you set the `kill-value` to `55` and your `ReplicaSet` has 4 pods the monkey will kill 2 random pods on every attack.
+## `fixed`
+If set to `fixed` they will kill a fixed number (`kill-value`) of pods each type.
+
+*Example*: if you set the `kill-value` to `3` and your `ReplicaSet` has 5 pods the monkey will kill 3 random pods on every attack.
+## `fixed_left`
+If set to `fixed_left` they will kill all pod types until there is `kill-value` pods left.
+
+*Example*: if you set the `kill-value` to `3` and your `ReplicaSet` has 5 pods the monkey will pods until there is 3 left. In this case it would kill 2 pods.
 
 # Pod Targeting
 
 ## Based on namespaces
 
-The monkey can either target individual pods or whole namespaces. If the option `target-namespaces` is sat to `namespaceA, namespaceB` the monkey will target all pods in those two namespaces. This means that the monkey may kill any pods in those namespaces.
-
-> Running 
+The monkey can either target individual pods or whole namespaces. If the option `--target-namespaces` is set to `"namespaceA, namespaceB"` the monkey will target all pods in those two namespaces. This means that the monkey may kill any pod (unless they [opt-out](#Opt-out)) in those namespaces.
 
 ## Opt-in
 
-This feature means you can make the monkey target individual pod in any namespace by adding the label `khaos-enabled: true` to it. If this label exist on a pod it doesn't matter if it inside in the namespaces specified by `target-namespaces`. 
+This feature means you can make the monkey target individual pod in any namespace by adding the label `khaos-enabled: true` to to the pod. If this label exist on a pod it doesn't matter if it inside in the namespaces specified by `--target-namespaces` or not. 
 
 *Opt-in deployment example*:
 ```yaml
@@ -49,31 +56,11 @@ spec:
         image: whatever-image
 ```
 
-*Opt-in cronjob example*:
-```yaml
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  name: whatever-cronjob
-spec:
-  schedule: "*/1 * * * *"
-  jobTemplate:
-    spec:
-      template:
-        metadata:
-          labels:
-            khaos-enabled: "true"
-        spec:
-          containers:
-          - name: whatever-container
-            image: whatever-image
-```
-
 ## Opt-out
 
-This feature means you can enable the monkey to target on all pods by default on specific namespaces and choose which pods you want to be excluded in those namespaces. All pods with the label `khaos-enabled: false` will opt-out and be excluded in the pod targeting by the monkey.
+This feature means you can make the monkey to target on all pods in specific namespaces and choose which pods you want to be excluded in those namespaces. All pods with the label `khaos-enabled: false` will opt-out and will be excluded in the pod targeting by the monkey.
 
-> Example: The monkey is targeting `namespaceA` and `podA` exist inside that namespace. If the pod has the annotation `khaos-enabled: false` it will not be ignored by the monkey and not killed - if it does not have that annotation it will be targeted by the monkey (and eventually be killed). 
+> *Example*: The monkey is targeting `namespaceA` and `podA` exist inside that namespace. If the pod has the label `khaos-enabled: false` it will be ignored by the monkey and not killed - if it does not have that label it will be targeted by the monkey (and eventually be killed). 
 
 *Opt-out Example*:
 ```yaml
@@ -94,8 +81,10 @@ spec:
 
 ## Target Grouping
 
-By default all pods in a replicaset is grouped. So if a Deployment has 4 replicas the monkey may kill 1 of those replicas. 
-You can make a custom group by adding an annothatuion to the pods - e.g. `khaos-group=my-group`. This would make the make the monkey treat your custom group the way it treats a replicaset. 
+By default all pods in a `ReplicaSet` is grouped. So if a `Deployment` has `4` replicas the monkey may kill *x* pods of those replicas. 
+You can make a custom group by adding a label to the pods - e.g. `khaos-group=my-group`. This would make the monkey treat your custom group the same way it treats a `ReplicaSet`. 
+
+> *Example*: Lets say that deployment `depA` has 2 pods/replicas and deployment `depB` has 1 pod/replicas and all 3 pods/replicas has the label `khaos-group=my-group`. The monkey is set to `--mode=fixed --kill-value=2`. In this case the monkey will kill either 2 pods of `depA`' pods or 1 pod from each deployment, since they are treaded as being in the same group.
 
 *deployment example*:
 ```yaml
@@ -109,6 +98,7 @@ spec:
     spec:
       metadata:
         labels:
+          khaos-enabled: "true"
           khaos-group: my-group
       containers:
       - name: whatever-container
@@ -120,17 +110,17 @@ spec:
 You can randomize how often the attack happens and how many pods are killed each attack.
 
 You can set `random-kill-count` to `true` if you want the monkey to kill a random amount of pods between 0 and the `kill-value`.
-> Example: If the monkey run with `--mode=percentage --kill-value=50 --random-kill-count=true` then the monkey will kill between 0 and 50 percent of the pods in each replacaset.
+> *Example*: If the monkey run with `--mode=percentage --kill-value=50 --random-kill-count=true` then the monkey will kill between `0` and `50` percent of the pods in each `ReplicaSet`.
 
 You can set `random-extra-time-between-chaos` to `5m` if you want you want to add additional random time between each attack.
-> Example: If the monkey run with `--min-time-between-chaos=1m --random-extra-time-between-chaos=1m` the attacks will happen with a random time interval between 1 and 2 minutes.
+> *Example*: If the monkey run with `--min-time-between-chaos=1m --random-extra-time-between-chaos=1m` the attacks will happen with a random time interval between 1 and 2 minutes.
 
-# Default Settings (Don't worry - it wont kill anything before you instruct it to)
+# Default Settings (Don't worry - it won't kill anything before you instruct it to)
 
-By default it does not target any namespaces, so it wont start killing pods until you specify namespaces to target or you make pods opt-in. 
+By default it does not target any namespaces, so it won't start killing pods until you specify namespaces to target or you make pods opt-in. 
 
 # Running/Testing on local machine
-You can test the monkey on your local machine before putting it on kubernetes. If you have your kube-config installed in `~/.kube/config` then you can just pull the repo to you machine and run `cargo run` in the root. If your config and persmissions are correct the monkey will starting killing pods on the current kubectl context.
+You can test the monkey on your local machine before putting it on kubernetes. If you have your kube-config installed in `~/.kube/config` and have `cargo` installed then you can just pull the repo to you machine and run `cargo run` in the root. If your config and permissions are correct the monkey will starting killing pods on the current `kubectl` context.
 
 # Installation
 
@@ -171,7 +161,7 @@ roleRef:
 EOF
 ```
 
-### Deploy the monkey.
+### Deploy the monkey
 
 > Feel free to tune the numbers yourself. Remember that the monkey may kill it self if it exist inside a targeted namespace and does not not [opt-out](#Opt-out). It is possible to run multiple instances of the monkey with different settings. 
 
