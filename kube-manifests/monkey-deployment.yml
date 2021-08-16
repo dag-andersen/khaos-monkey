@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: khaos-monkey
+  name: khaos-monkey
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: khaos-monkey
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        khaos-enabled: "false"
+        app: khaos-monkey
+    spec:
+      containers:
+      - name: khaos-monkey
+        image: dagandersen/khaos-monkey:111
