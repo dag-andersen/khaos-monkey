@@ -35,44 +35,37 @@ impl FromStr for DeleteMode {
 #[derive(Debug, StructOpt)]
 #[structopt(name = "khaos-monkey")]
 struct Opt {
-	/// Namespace
-	#[structopt(long, env, default_value = "default")]
-	namespace: String,
-
-	#[structopt(long, env, default_value = "1")]
-	value: usize,
-
-	/// Can be fixed, fixed_left, or percentage.
+	/// Can be `fixed`, `fixed_left`, or `percentage`. If set to `percentage` they monkey will kill a given percentage of targeted pods. If set to `fixed` they will kill a fixed number (`value`) of pods each type. If set to `fixed_left` they will kill all pod types until there is `value` pods left.
 	#[structopt(long, env, default_value = "fixed")]
 	mode: String,
 
-	/// Number of types that can be deleted at a time. no limit if value is -1.
+	/// The number of pods to kill each type. The 
+	#[structopt(long, env, default_value = "1")]
+	kill_value: usize,
+	
+	/// namespaces you want the monkey to target. Example: "namespace1, namespace2". The monkey will target all pods in these namespace unless they opt-out.
+	#[structopt(long, env, default_value = "default")]
+	target_namespaces: String,
+	
+	/// namespaces you want the monkey to ignore. Pods that opt-in running in these namespaces will also be ignored.
+	#[structopt(long, env, default_value = "kube-system, kube-public, kube-node-lease")]
+	blacklisted_namespaces: String,
+
+	/// Number of pod-types that can be deleted at a time. No limit if value is -1. Example: if set to "2" it may attack two replicasets. 
 	#[structopt(long, env, default_value = "1")]
 	attacks_per_interval: i32,
 
-	/// If true a number between 0 and 1 is multiplied with number of pods to kill.
+	/// If "true" a number between 0 and 1 is multiplied with number of pods to kill. 
 	#[structopt(long, env)]
-	random: bool,
-
-	/// If true a number between 0 and 1 is multiplied with number of pods to kill.
-	#[structopt(long, env, default_value = "default")]
-	white_namespaces: String,
-
-	/// If true a number between 0 and 1 is multiplied with number of pods to kill.
-	#[structopt(long, env, default_value = "kube-system, kube-public, kube-node-lease")]
-	black_namespaces: String,
+	random_kill_count: bool,
 
 	/// Minimum time between chaos attacks.
 	#[structopt(long, env, default_value = "1m")]
 	min_time_between_chaos: String,
 
-	/// This specifies how often the chaos attack happens.
+	/// This specifies a random time interval that will be added to `min_time_between_chaos` each attack. Example: If both options are sat to `1m` the attacks will happen with a random time interval between 1 and 2 minutes.
 	#[structopt(long, env, default_value = "1m")]
-	random_time_between_chaos: String,
-
-	/// This specifies how often the chaos attack happens.
-	#[structopt(long, env, default_value = "")]
-	blacklisted_namespace: String,
+	random_extra_time_between_chaos: String,
 }
 
 #[tokio::main]
@@ -88,12 +81,12 @@ async fn start() -> Result<(), Box<dyn Error>> {
 
 	let opt = Opt::from_args();
 
-	parse_duration(&opt.min_time_between_chaos).expect("Failed to parse min_time_between_chaos");
-	parse_duration(&opt.random_time_between_chaos).expect("Failed to parse random_time_between_chaos");
+	let min_time_between_chaos = parse_duration(&opt.min_time_between_chaos).expect("Failed to parse min_time_between_chaos");
+	let random_extra_time_between_chaos = parse_duration(&opt.random_extra_time_between_chaos).expect("Failed to parse random_time_between_chaos");
 
 	let mode = DeleteMode::from_str(&opt.mode).expect("msg");
-	let random = opt.random;
-	let value = opt.value;
+	let random = opt.random_kill_count;
+	let value = opt.kill_value;
 	let num_attacks = if opt.attacks_per_interval > -1 {
 		opt.attacks_per_interval
 	} else {
@@ -104,23 +97,7 @@ async fn start() -> Result<(), Box<dyn Error>> {
 	let client = Client::try_default().await?;
 
 	let pod_api: Api<Pod> = Api::all(client.clone());
-	let aa: Api<Namespace> = Api::all(client.clone());
-
-	let namespaces_whitelist: HashSet<String> =
-		opt.white_namespaces.split(',').into_iter().map(|n| String::from(n.trim())).filter(|n| n != "").collect();
-	println!("whitelisted: {:?}", namespaces_whitelist);
-	let namespaces_blacklist: HashSet<String> =
-		opt.black_namespaces.split(',').into_iter().map(|n| String::from(n.trim())).filter(|n| n != "").collect();
-	println!("blacklisted: {:?}", namespaces_blacklist);
-	if !namespaces_whitelist.is_disjoint(&namespaces_blacklist) {
-		println!("a namespace can't be both in whitelist and blacklist");
-		return Ok(());
-	};
-	let namespaces_in_cluster: HashSet<String> = aa.list(&ListParams::default()).await?.iter().map(|n| n.name()).collect();
-	println!("Namespaces found on cluster: {:?}", namespaces_in_cluster);
-
-	let accepted_namespaces: HashSet<String> = namespaces_whitelist.intersection(&namespaces_in_cluster).map(|s| String::from(s)).collect();
-	println!("Accepted Namespaces: {:?}", accepted_namespaces);
+	let accepted_namespaces: HashSet<String> = get_accepted_namespaces(opt, &client).await?;
 
 	loop {
 		println!("###################");
@@ -148,14 +125,38 @@ async fn start() -> Result<(), Box<dyn Error>> {
 		println!("");
 		println!("### Chaos over");
 
-		let wait_time = parse_duration(&opt.min_time_between_chaos)?
-			+ Duration::from_secs((parse_duration(&opt.random_time_between_chaos)?.as_secs() as f64 * &rng.gen::<f64>()) as u64);
-		println!("Time until next Chaos: {}", format_duration(wait_time));
+		let wait_time = min_time_between_chaos + Duration::from_secs((random_extra_time_between_chaos.as_secs() as f64 * &rng.gen::<f64>()) as u64);
+		
+			println!("Time until next Chaos: {}", format_duration(wait_time));
 		println!("###################");
 		println!("");
 
 		sleep(wait_time).await;
 	}
+}
+
+async fn get_accepted_namespaces(opt: Opt, client: &Client) -> Result<HashSet<String>, Box<dyn Error>> {
+
+	let namespace_api: Api<Namespace> = Api::all(client.clone());
+
+	let comma_string_to_set = |port: String| port.split(',').into_iter().map(|n| String::from(n.trim())).filter(|n| n != "").collect::<HashSet<String>>();
+
+	let target_namespaces: HashSet<String> = comma_string_to_set(opt.target_namespaces);
+	println!("target_namespaces: {:?}", target_namespaces);
+	
+	let namespaces_blacklist: HashSet<String> =	comma_string_to_set(opt.blacklisted_namespaces);
+	println!("blacklisted: {:?}", namespaces_blacklist);
+	
+	if !target_namespaces.is_disjoint(&namespaces_blacklist) {
+		panic!("a namespace can't be both in target_namespaces and namespaces_blacklist");
+	};
+
+	let namespaces_in_cluster: HashSet<String> = namespace_api.list(&ListParams::default()).await?.iter().map(|n| n.name()).collect();
+	println!("Namespaces found in cluster: {:?}", namespaces_in_cluster);
+
+	let accepted_namespaces: HashSet<String> = target_namespaces.intersection(&namespaces_in_cluster).map(|s| String::from(s)).collect();
+	println!("Monkey will target: {:?}", accepted_namespaces);
+	Ok(accepted_namespaces)
 }
 
 async fn get_grouped_pods(pods: &Api<Pod>, allowed_namespaces: &HashSet<String>) -> Result<HashMap<String, Vec<Pod>>, Box<dyn Error>> {

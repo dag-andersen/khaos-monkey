@@ -1,10 +1,12 @@
 ![](./images/khaos-monkey-01.png)
+
 # khaos-monkey - A simple Chaos Monkey for Kubernetes
 Built on top of [kube-rs](https://github.com/kube-rs/kube-rs)
 
+
 # Why would you need this monkey?
 
-
+Read about Chaos Engineering
 
 # Features
 
@@ -23,7 +25,7 @@ The monkey can either target individual pods or whole namespaces. If the option 
 
 This feature means you can make the monkey target individual pod in any namespace by adding the label `khaos-enabled: true` to it. If this label exist on a pod it doesn't matter if it inside in the namespaces specified by `target_namespaces`. 
 
-*Opt-in Example*:
+*Opt-in deployment example*:
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -38,6 +40,18 @@ spec:
       containers:
       - name: echo-client
         image: whatever-image
+```
+
+*Opt-in cronjob example*:
+```yaml
+apiVersion: apps/v1
+kind: Cronjob  something 
+metadata:
+  name: whatever-deployment
+spec:
+  template:
+    spec:
+... . . . . ..  . . ..  . ... ..  ... .
 ```
 
 ## Opt-out
@@ -67,14 +81,13 @@ spec:
 
 The the usage of the option `kill_value` all depends on what mode the monkey is using.
 
-* `percentage` - The monkey will kill a given percentage of targeted pods. (The number is rounded down). Example: if you set the `value` to `55` and your replicaset has 4 pods the monkey will kill 2 random pods on every attack.
-* `fixed` - If sat to `fixed` they will kill a fixed number (`value`) of pods each type. Example: if you set the `value` to `3` and your replicaset has 5 pods the monkey will kill 3 random pods on every attack.
-* `fixed_left` - If sat to `fixed_left` they will kill all pod types until there is `value` pods left. Example: if you set the `value` to `3` and your replicaset has 5 pods the monkey will pods until there is 3 left. In this case it would kill 2 pods.
+* `percentage` - The monkey will kill a given percentage of targeted pods. (The number is rounded down). Example: if you set the `kill_value` to `55` and your replicaset has 4 pods the monkey will kill 2 random pods on every attack.
+* `fixed` - If sat to `fixed` they will kill a fixed number (`kill_value`) of pods each type. Example: if you set the `kill_value` to `3` and your replicaset has 5 pods the monkey will kill 3 random pods on every attack.
+* `fixed_left` - If sat to `fixed_left` they will kill all pod types until there is `kill_value` pods left. Example: if you set the `kill_value` to `3` and your replicaset has 5 pods the monkey will pods until there is 3 left. In this case it would kill 2 pods.
 
 ## Randomness
 
 You can randomize how often the attack happens and how many pods are killed each attack.
-
 
 You can set `random-kill-count` to `true` if you want the monkey to kill a random amount of pods between 0 and the `kill-value`.
 > Example: If the monkey run with `--mode=percentage --kill-value=50 --random-kill-count=true` then the monkey will kill between 0 and 50 percent of the pods in each replacaset.
@@ -88,14 +101,19 @@ By default it does not target any namespaces, so it wont start killing pods unti
 
 # Installation
 
-## Option 1 - 3 commands
+### Create the namespace:
+```bash
+$ kubectl create namespace khaos-monkey
+```
+### Create the right permission with rbac:
 
-3 easy commands
-
-## Option 2 - copy paste
-
-
+Either by referering to the repo file:
+```bash
+$ kubectl apply 
+```
+or run:
 ```yaml
+cat <<EOF | kubectl apply -f -
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -120,7 +138,15 @@ roleRef:
   apiGroup: ""
 ```
 
+### Deploy the monkey.
 
+> Feel free to tune the numbers yourself. Remember that the monkey may kill it self if it exist inside a targeted namespace and does not not [opt-out](#Opt-out). It is possible to run multiple instances of the monkey with different settings. 
+
+Either by referering to the repo file:
+```bash
+$ kubectl apply -f  
+```
+or run:
 
 ```yaml
 cat <<EOF | kubectl apply -f -
@@ -154,7 +180,8 @@ spec:
 EOF
 ```
 
-# CLI Options
+# All CLI Options
+
 ```bash
 khaos-monkey 0.1.0
 
@@ -162,33 +189,26 @@ USAGE:
     khaos-monkey [OPTIONS]
 
 OPTIONS:
+    --mode <mode> [default: fixed]
+        Can be fixed, fixed_left, or percentage
+
+    --kill_value [default: 1]
+
+    --target_namespaces [default: default]
+        Namespace [default: default]
+    
+    --blacklisted-namespace [default: kube-system, kube-public, kube-node-lease]
+        This specifies how often the chaos attack happens
+
     --attacks-per-interval [default: 1]
         Number of types that can be deleted at a time. no limit if value is -1
 
-    --black-namespaces [default: kube-system, kube-public, kube-node-lease]
+    --random-kill-count [default: false]
         If true a number between 0 and 1 is multiplied with number of pods to kill
-
-    --blacklisted-namespace [default: ""]
-        This specifies how often the chaos attack happens
 
     --min-time-between-chaos [default: 1m]
         Minimum time between chaos attacks
 
-    --mode <mode> [default: fixed]
-        Can be fixed, fixed_left, or percentage
-
-    --namespace [default: default]
-        Namespace [default: default]
-    
-    --random [default: false]
-        If true a number between 0 and 1 is multiplied with number of pods to kill
-
-    --random-time-between-chaos [default: 1m]
+    --random-extra-time-between-chaos [default: 1m]
         This specifies how often the chaos attack happens [default: 1m]
-
-    --value [default: 1]
-
-    --white-namespaces [default: default]
-        If true a number between 0 and 1 is multiplied with number of pods to kill
-
 ```
