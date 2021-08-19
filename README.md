@@ -1,6 +1,6 @@
-![](./images/khaos-monkey-02.png)
+![khaos-monkey](./images/khaos-monkey-02.png)
 
-# khaos-monkey - A simple Chaos Monkey for Kubernetes
+# A simple Chaos Monkey for Kubernetes
 Built on top of [kube-rs](https://github.com/kube-rs/kube-rs)
 
 
@@ -14,18 +14,20 @@ I created this tools because the tools i found didnt fit my use-case very well. 
 
 # 3 Modes
 
-### `percentage`
+### Percentage of pods killed
 The monkey will kill a given percentage of targeted pods. The number is rounded down.
 
-*Example*: if you run the monkey with  `--mode=percentage --kill-value=55` and your `ReplicaSet` has 4 pods the monkey will kill 2 random pods on every attack.
-### `fixed`
+> *Example*: if you run the monkey with  `--mode=percentage --kill-value=55` and your `ReplicaSet` has 4 pods the monkey will kill 2 random pods on every attack.
+
+### Fixed number of pods killed
 If set to `fixed` they will kill a fixed number (`kill-value`) of pods each type.
 
-*Example*: if you run the monkey with  `--mode=fixed --kill-value=3` and your `ReplicaSet` has 5 pods the monkey will kill 3 random pods on every attack.
-### `fixed_left`
+> *Example*: if you run the monkey with  `--mode=fixed --kill-value=3` and your `ReplicaSet` has 5 pods the monkey will kill 3 random pods on every attack.
+
+### Fixed number of pods left
 If set to `fixed_left` they will kill all pod types until there is `kill-value` pods left.
 
-*Example*: if you run the monkey with `--mode=fixed_left --kill-value=3` and your `ReplicaSet` has 5 pods the monkey will pods until there is 3 left. In this case it would kill 2 pods.
+> *Example*: if you run the monkey with `--mode=fixed_left --kill-value=3` and your `ReplicaSet` has 5 pods the monkey will kill pods until there is 3 left. In this case it would kill 2 pods.
 
 # Pod Targeting
 
@@ -126,7 +128,7 @@ You can set `random-extra-time-between-chaos` to `5m` if you want you want to ad
 By default it does not target any namespaces, so it won't start killing pods until you specify namespaces to target or you make pods opt-in. 
 
 # Running/Testing on local machine
-You can test the monkey on your local machine before putting it on kubernetes. If you have your kube-config installed in `~/.kube/config` and have `cargo` installed then you can just pull the repo and run `cargo run -- --target-namespaces="my-namespace"` in the root. If your config and permissions are correct the monkey will starting killing pods in namespace, "my-namespace", on the current `kubectl` context.
+You can test the monkey on your local machine before putting it on kubernetes. If you have your kube-config installed in `~/.kube/config` and have `cargo` installed then you can just pull the repo and run `cargo run -- --target-namespaces="my-namespace"` in the repo root. If your config and permissions are correct the monkey will starting killing pods in namespace, "my-namespace", on the current `kubectl` context.
 
 # Installation
 
