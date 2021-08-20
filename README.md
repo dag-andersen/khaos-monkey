@@ -27,12 +27,12 @@ The monkey will kill a given percentage of targeted pods. The number is rounded 
 > *Example*: if you run the monkey with  `./khoas-monkey percentage 55` and your `ReplicaSet` has 4 pods the monkey will kill 2 random pods on every attack.
 
 ### Fixed number of pods killed
-If set to `fixed` they will kill a fixed number (`kill-value`) of pods each type.
+If set to `fixed` they will kill a fixed number of pods each type.
 
 > *Example*: if you run the monkey with  `./khoas-monkey fixed 3` and your `ReplicaSet` has 5 pods the monkey will kill 3 random pods on every attack.
 
 ### Fixed number of pods left
-If set to `fixed_left` they will kill all pod types until there is `kill-value` pods left.
+If set to `fixed_left` they will kill all pod types until there is a fixed number of pods left.
 
 > *Example*: if you run the monkey with `./khoas-monkey fixed-left 3` and your `ReplicaSet` has 5 pods the monkey will kill pods until there is 3 left. In this case it would kill 2 pods.
 
@@ -124,7 +124,7 @@ You can specify namespaces where it is not possible to [opt-in](#opt-in).
 
 You can randomize how often the attack happens and how many pods are killed each attack.
 
-You can set `random-kill-count` to `true` if you want the monkey to kill a random amount of pods between 0 and the `kill-value`.
+You can set `random-kill-count` to `true` if you want the monkey to kill a random amount of pods between 0 and the specified value for that mode.
 > *Example*: If the monkey run with `./khaos-monkey --random-kill-count=true percentage 50` then the monkey will kill between `0` and `50` percent of the pods in each `ReplicaSet`.
 
 You can set `random-extra-time-between-chaos` to `5m` if you want you want to add additional random time between each attack.
@@ -206,8 +206,36 @@ spec:
     spec:
       containers:
       - name: khaos-monkey
-        image: dagandersen/khaos-monkey:111
+        image: dagandersen/khaos-monkey:v0.1.0
+        args: ["fixed", "1" ]
 EOF
+```
+
+### Verify that the Khaos Monkey work
+Run the following command to verify that the monkey works as expected. 
+```bash
+$ kubectl wait -A --for=condition=ready pod -l "app=khaos-monkey" && kubectl logs -l app=khaos-monkey -n khaos-monkey --follow=true --tail=100
+```
+
+The command will print something like this
+
+```
+target_namespaces from args/env: {}
+blacklisted_namespaces from args/env: {"kube-system", "kube-node-lease", "kube-public"}
+Namespaces found in cluster: {"kube-system", "default", "kube-node-lease", "khaos-monkey", "kube-public", "local-path-storage"}
+
+Monkey will target: {}
+
+###################
+### Chaos Beginning
+
+Killed no pods
+
+### Chaos over
+Time until next Chaos: 1m 42s
+###################
+
+...
 ```
 
 # All CLI Options
@@ -243,7 +271,7 @@ OPTIONS:
 
   --random-kill-count <random-kill-count>
       If "true" a number between 0 and 1 is multiplied with number of pods to kill
-      [env: RANDOM_KILL_COUNT=]
+      [env: RANDOM_KILL_COUNT=]  [default: false]
 
   --target-namespaces <target-namespaces>
       namespaces you want the monkey to target. Example: "namespace1, namespace2". The monkey will target all pods
@@ -253,6 +281,5 @@ OPTIONS:
 SUBCOMMANDS:
   fixed         Kill a fixed number of each pod group
   fixed-left    Kill pods until a fixed number of each pod group is alive
-  help          Prints this message or the help of the given subcommand(s)
   percentage    Kill a percentage of each pod group
 ```

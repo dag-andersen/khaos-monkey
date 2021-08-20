@@ -38,7 +38,7 @@ struct Opt {
 	mode: DeleteMode,
 
 	/// namespaces you want the monkey to target. Example: "namespace1, namespace2". The monkey will target all pods in these namespace unless they opt-out.
-	#[structopt(long, env, default_value = "default")]
+	#[structopt(long, env, default_value = "")]
 	target_namespaces: String,
 
 	/// namespaces you want the monkey to ignore. Pods running in these namespaces can't be target.
@@ -73,7 +73,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 async fn start() -> Result<(), Box<dyn Error>> {
 	let opt = Opt::from_args();
 
-	println!("Starting");
 
 	let min_time_between_chaos = parse_duration(&opt.min_time_between_chaos).expect("Failed to parse min-time-between-chaos");
 	let random_extra_time_between_chaos =
@@ -145,21 +144,23 @@ async fn get_targeted_namespace(target_namespaces: &str, blacklisted_namespaces:
 		|port: &str| port.split(',').into_iter().map(|n| String::from(n.trim())).filter(|n| n != "").collect::<HashSet<String>>();
 
 	let target_namespaces: HashSet<String> = comma_string_to_set(target_namespaces);
-	println!("target_namespaces: {:?}", target_namespaces);
+	println!("target_namespaces from args/env: {:?}", target_namespaces);
 
-	let namespaces_blacklist: HashSet<String> = comma_string_to_set(blacklisted_namespaces);
-	println!("blacklisted: {:?}", namespaces_blacklist);
+	let blacklisted_namespaces: HashSet<String> = comma_string_to_set(blacklisted_namespaces);
+	println!("blacklisted_namespaces from args/env: {:?}", blacklisted_namespaces);
 
-	if !target_namespaces.is_disjoint(&namespaces_blacklist) {
+	if !target_namespaces.is_disjoint(&blacklisted_namespaces) {
 		panic!("a namespace can't be both in target_namespaces and namespaces_blacklist");
 	};
 
 	let namespaces_in_cluster: HashSet<String> = namespace_api.list(&ListParams::default()).await?.iter().map(|n| n.name()).collect();
 	println!("Namespaces found in cluster: {:?}", namespaces_in_cluster);
 
-	let accepted_namespaces: HashSet<String> = target_namespaces.intersection(&namespaces_in_cluster).map(|s| String::from(s)).collect();
-	println!("Monkey will target: {:?}", accepted_namespaces);
-	Ok(accepted_namespaces)
+	println!("");
+	let target_namespaces_in_cluster: HashSet<String> = target_namespaces.intersection(&namespaces_in_cluster).map(|s| String::from(s)).collect();
+	println!("Monkey will target namespace: {:?}", target_namespaces_in_cluster);
+	println!("");
+	Ok(target_namespaces_in_cluster)
 }
 
 async fn get_grouped_pods(pods: &Api<Pod>, targeted_namespace: &HashSet<String>) -> Result<HashMap<String, Vec<Pod>>, Box<dyn Error>> {
