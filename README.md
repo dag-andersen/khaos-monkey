@@ -10,6 +10,7 @@ Built on top of [kube-rs](https://github.com/kube-rs/kube-rs)
 * [Randomness](#randomness)
 * [Running/Testing on local machine](#runningtesting-on-local-machine)
 * [Installation](#installation)
+* [CLI Options](#cli-options)
 
 # Why would you need this monkey?
 
@@ -238,7 +239,7 @@ Time until next Chaos: 1m 42s
 ...
 ```
 
-# All CLI Options
+# CLI Options
 
 ```
 khaos-monkey 0.1.0

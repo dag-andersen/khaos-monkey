@@ -19,16 +19,16 @@ use tokio::time::sleep;
 enum DeleteMode {
 	/// Kill a fixed number of each pod group
 	Fixed {
-		number_of_pods: usize
+		number_of_pods: usize,
 	},
 	/// Kill pods until a fixed number of each pod group is alive.
 	FixedLeft {
-		number_of_pods_left_after_chaos: usize
+		number_of_pods_left_after_chaos: usize,
 	},
 	/// Kill a percentage of each pod group
 	Percentage {
-		percentage_of_pods: usize
-	}
+		percentage_of_pods: usize,
+	},
 }
 
 #[derive(StructOpt)]
@@ -59,7 +59,7 @@ struct Opt {
 
 	/// This specifies a random time interval that will be added to `min-time-between-chaos` each attack. Example: If both options are sat to `1m` the attacks will happen with a random time interval between 1 and 2 minutes.
 	#[structopt(long, env, default_value = "1m")]
-	random_extra_time_between_chaos: String
+	random_extra_time_between_chaos: String,
 }
 
 #[tokio::main]
@@ -73,10 +73,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 async fn start() -> Result<(), Box<dyn Error>> {
 	let opt = Opt::from_args();
 
-
 	let min_time_between_chaos = parse_duration(&opt.min_time_between_chaos).expect("Failed to parse min-time-between-chaos");
-	let random_extra_time_between_chaos =
-		parse_duration(&opt.random_extra_time_between_chaos).expect("Failed to parse random-time-between-chaos");
+	let random_extra_time_between_chaos = parse_duration(&opt.random_extra_time_between_chaos).expect("Failed to parse random-time-between-chaos");
 
 	let mode = opt.mode;
 	let random = opt.random_kill_count;
@@ -108,6 +106,7 @@ async fn start() -> Result<(), Box<dyn Error>> {
 					DeleteMode::Percentage { percentage_of_pods: value } => (pods.len() * value) as f32 / 100.0,
 					DeleteMode::FixedLeft { number_of_pods_left_after_chaos: value } => max(0, pods.len() - value) as f32,
 				};
+
 				let pods_to_delete = if random {
 					pods_to_delete * &rng.gen::<f32>()
 				} else {
@@ -137,7 +136,11 @@ async fn start() -> Result<(), Box<dyn Error>> {
 	}
 }
 
-async fn get_targeted_namespace(target_namespaces: &str, blacklisted_namespaces: &str, client: &Client) -> Result<HashSet<String>, Box<dyn Error>> {
+async fn get_targeted_namespace(
+	target_namespaces: &str,
+	blacklisted_namespaces: &str,
+	client: &Client,
+) -> Result<HashSet<String>, Box<dyn Error>> {
 	let namespace_api: Api<Namespace> = Api::all(client.clone());
 
 	let comma_string_to_set =
@@ -157,7 +160,7 @@ async fn get_targeted_namespace(target_namespaces: &str, blacklisted_namespaces:
 	println!("Namespaces found in cluster: {:?}", namespaces_in_cluster);
 
 	println!("");
-	let target_namespaces_in_cluster: HashSet<String> = target_namespaces.intersection(&namespaces_in_cluster).map(|s| String::from(s)).collect();
+	let target_namespaces_in_cluster: HashSet<String> =	target_namespaces.intersection(&namespaces_in_cluster).map(|s| String::from(s)).collect();
 	println!("Monkey will target namespace: {:?}", target_namespaces_in_cluster);
 	println!("");
 	Ok(target_namespaces_in_cluster)
