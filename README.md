@@ -3,6 +3,13 @@
 # A simple Chaos Monkey for Kubernetes
 Built on top of [kube-rs](https://github.com/kube-rs/kube-rs)
 
+* [Why would you need this monkey?](#why-would-you-need-this-monkey)
+* [How is this monkey different from similar tools?](#how-is-this-monkey-different-from-similar-tools)
+* [3 Modes](#3-modes)
+* [Pod Targeting](#pod-targeting)
+* [Randomness](#randomness)
+* [Running/Testing on local machine](#runningtesting-on-local-machine)
+* [Installation](#installation)
 
 # Why would you need this monkey?
 
@@ -17,17 +24,17 @@ I created this tools because the tools i found didnt fit my use-case very well. 
 ### Percentage of pods killed
 The monkey will kill a given percentage of targeted pods. The number is rounded down.
 
-> *Example*: if you run the monkey with  `--mode=percentage --kill-value=55` and your `ReplicaSet` has 4 pods the monkey will kill 2 random pods on every attack.
+> *Example*: if you run the monkey with  `./khoas-monkey percentage 55` and your `ReplicaSet` has 4 pods the monkey will kill 2 random pods on every attack.
 
 ### Fixed number of pods killed
 If set to `fixed` they will kill a fixed number (`kill-value`) of pods each type.
 
-> *Example*: if you run the monkey with  `--mode=fixed --kill-value=3` and your `ReplicaSet` has 5 pods the monkey will kill 3 random pods on every attack.
+> *Example*: if you run the monkey with  `./khoas-monkey fixed 3` and your `ReplicaSet` has 5 pods the monkey will kill 3 random pods on every attack.
 
 ### Fixed number of pods left
 If set to `fixed_left` they will kill all pod types until there is `kill-value` pods left.
 
-> *Example*: if you run the monkey with `--mode=fixed_left --kill-value=3` and your `ReplicaSet` has 5 pods the monkey will kill pods until there is 3 left. In this case it would kill 2 pods.
+> *Example*: if you run the monkey with `./khoas-monkey fixed-left 3` and your `ReplicaSet` has 5 pods the monkey will kill pods until there is 3 left. In this case it would kill 2 pods.
 
 # Pod Targeting
 
@@ -86,7 +93,7 @@ spec:
 By default all pods in a `ReplicaSet` is grouped. So if a `Deployment` has `4` replicas the monkey may kill *x* pods of those replicas. 
 You can make a custom group by adding a label to the pods - e.g. `khaos-group=my-group`. This would make the monkey treat your custom group the same way it treats a `ReplicaSet`. 
 
-> *Example*: Lets say that deployment `depA` has 2 pods/replicas and deployment `depB` has 1 pod/replicas and all 3 pods/replicas has the label `khaos-group=my-group`. The monkey is set to `--mode=fixed --kill-value=2`. In this case the monkey will kill either 2 pods of `depA`' pods or 1 pod from each deployment, since they are treated as being in the same group.
+> *Example*: Lets say that deployment `depA` has 2 pods/replicas and deployment `depB` has 1 pod/replicas and all 3 pods/replicas has the label `khaos-group=my-group`. The monkey is set to `./khaos-monkey fixed 2`. In this case the monkey will kill either 2 pods of `depA`' pods or 1 pod from each deployment, since they are treated as being in the same group.
 
 *deployment example*:
 ```yaml
@@ -118,19 +125,17 @@ You can specify namespaces where it is not possible to [opt-in](#opt-in).
 You can randomize how often the attack happens and how many pods are killed each attack.
 
 You can set `random-kill-count` to `true` if you want the monkey to kill a random amount of pods between 0 and the `kill-value`.
-> *Example*: If the monkey run with `--mode=percentage --kill-value=50 --random-kill-count=true` then the monkey will kill between `0` and `50` percent of the pods in each `ReplicaSet`.
+> *Example*: If the monkey run with `./khaos-monkey --random-kill-count=true percentage 50` then the monkey will kill between `0` and `50` percent of the pods in each `ReplicaSet`.
 
 You can set `random-extra-time-between-chaos` to `5m` if you want you want to add additional random time between each attack.
 > *Example*: If the monkey run with `--min-time-between-chaos=1m --random-extra-time-between-chaos=1m` the attacks will happen with a random time interval between 1 and 2 minutes.
 
-# Default Settings (Don't worry - it won't kill anything before you instruct it to)
-
-By default it does not target any namespaces, so it won't start killing pods until you specify namespaces to target or you make pods opt-in. 
-
 # Running/Testing on local machine
-You can test the monkey on your local machine before putting it on kubernetes. If you have your kube-config installed in `~/.kube/config` and have `cargo` installed then you can just pull the repo and run `cargo run -- --target-namespaces="my-namespace"` in the repo root. If your config and permissions are correct the monkey will starting killing pods in namespace, "my-namespace", on the current `kubectl` context.
+You can test the monkey on your local machine before putting it on kubernetes. If you have your kube-config installed in `~/.kube/config` and have `cargo` installed then you can just pull the repo and run `cargo run -- --target-namespaces="my-namespace" fixed 1` in the repo root. If your config and permissions are correct the monkey will starting killing pods in namespace, "my-namespace", on the current `kubectl` context.
 
 # Installation
+
+> Note: The default settings not target any namespaces, so it won't start killing pods until you specify namespaces to target or you make pods opt-in.
 
 ### Create the namespace:
 ```bash
@@ -211,29 +216,43 @@ EOF
 khaos-monkey 0.1.0
 
 USAGE:
-    khaos-monkey [OPTIONS]
+  khaos-monkey [OPTIONS] <SUBCOMMAND>
+
+FLAGS:
+  -h, --help       Prints help information
+  -V, --version    Prints version information
 
 OPTIONS:
-    --mode <mode> [default: fixed]
-        Can be fixed, fixed_left, or percentage
+  --attacks-per-interval <attacks-per-interval>
+      Number of pod-types that can be deleted at a time. No limit if value is -1. Example: if set to "2" it may
+      attack two ReplicaSets
+      [env: ATTACKS_PER_INTERVAL=]  [default: 1]
+  
+  --blacklisted-namespaces <blacklisted-namespaces>
+      namespaces you want the monkey to ignore. Pods running in these namespaces can't be target
+      [env: BLACKLISTED_NAMESPACES=]  [default: kube-system, kube-public, kube-node-lease]
+  
+  --min-time-between-chaos <min-time-between-chaos>
+      Minimum time between chaos attacks
+      [env: MIN_TIME_BETWEEN_CHAOS=]  [default: 1m]
 
-    --kill-value [default: 1]
+  --random-extra-time-between-chaos <random-extra-time-between-chaos>
+      This specifies a random time interval that will be added to `min-time-between-chaos` each attack. Example:
+      If both options are sat to `1m` the attacks will happen with a random time interval between 1 and 2 minutes
+      [env: RANDOM_EXTRA_TIME_BETWEEN_CHAOS=]  [default: 1m]
 
-    --target-namespaces [default: default]
-        Namespace [default: default]
-    
-    --blacklisted-namespace [default: kube-system, kube-public, kube-node-lease]
-        This specifies how often the chaos attack happens
+  --random-kill-count <random-kill-count>
+      If "true" a number between 0 and 1 is multiplied with number of pods to kill
+      [env: RANDOM_KILL_COUNT=]
 
-    --attacks-per-interval [default: 1]
-        Number of types that can be deleted at a time. no limit if value is -1
+  --target-namespaces <target-namespaces>
+      namespaces you want the monkey to target. Example: "namespace1, namespace2". The monkey will target all pods
+      in these namespace unless they opt-out
+      [env: TARGET_NAMESPACES=]  [default: default]
 
-    --random-kill-count [default: false]
-        If true a number between 0 and 1 is multiplied with number of pods to kill
-
-    --min-time-between-chaos [default: 1m]
-        Minimum time between chaos attacks
-
-    --random-extra-time-between-chaos [default: 1m]
-        This specifies how often the chaos attack happens [default: 1m]
+SUBCOMMANDS:
+  fixed         Kill a fixed number of each pod group
+  fixed-left    Kill pods until a fixed number of each pod group is alive
+  help          Prints this message or the help of the given subcommand(s)
+  percentage    Kill a percentage of each pod group
 ```

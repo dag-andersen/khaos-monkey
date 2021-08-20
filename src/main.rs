@@ -17,15 +17,15 @@ use tokio::time::sleep;
 
 #[derive(StructOpt)]
 enum DeleteMode {
-	/// Kill a fixed amount of each pod type
+	/// Kill a fixed number of each pod group
 	Fixed {
 		number_of_pods: usize
 	},
-	/// Kill a fixed amount of each pod type
+	/// Kill pods until a fixed number of each pod group is alive.
 	FixedLeft {
 		number_of_pods_left_after_chaos: usize
 	},
-	/// Kill a percentage of each pod type
+	/// Kill a percentage of each pod group
 	Percentage {
 		percentage_of_pods: usize
 	}
@@ -34,7 +34,6 @@ enum DeleteMode {
 #[derive(StructOpt)]
 #[structopt(name = "khaos-monkey")]
 struct Opt {
-	/// Can be `fixed`, `fixed_left`, or `percentage`. If set to `percentage` they monkey will kill a given percentage of targeted pods. If set to `fixed` they will kill a fixed number (`value`) of pods each type. If set to `fixed_left` they will kill all pod types until there is `value` pods left.
 	#[structopt(subcommand)]
 	mode: DeleteMode,
 
@@ -42,11 +41,11 @@ struct Opt {
 	#[structopt(long, env, default_value = "default")]
 	target_namespaces: String,
 
-	/// namespaces you want the monkey to ignore. Pods that opt-in running in these namespaces will also be ignored.
+	/// namespaces you want the monkey to ignore. Pods running in these namespaces can't be target.
 	#[structopt(long, env, default_value = "kube-system, kube-public, kube-node-lease")]
 	blacklisted_namespaces: String,
 
-	/// Number of pod-types that can be deleted at a time. No limit if value is -1. Example: if set to "2" it may attack two replicasets.
+	/// Number of pod-types that can be deleted at a time. No limit if value is -1. Example: if set to "2" it may attack two ReplicaSets.
 	#[structopt(long, env, default_value = "1")]
 	attacks_per_interval: i32,
 
@@ -58,9 +57,9 @@ struct Opt {
 	#[structopt(long, env, default_value = "1m")]
 	min_time_between_chaos: String,
 
-	/// This specifies a random time interval that will be added to `min_time_between_chaos` each attack. Example: If both options are sat to `1m` the attacks will happen with a random time interval between 1 and 2 minutes.
+	/// This specifies a random time interval that will be added to `min-time-between-chaos` each attack. Example: If both options are sat to `1m` the attacks will happen with a random time interval between 1 and 2 minutes.
 	#[structopt(long, env, default_value = "1m")]
-	random_extra_time_between_chaos: String,
+	random_extra_time_between_chaos: String
 }
 
 #[tokio::main]
