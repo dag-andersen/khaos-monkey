@@ -102,9 +102,9 @@ async fn start() -> Result<(), Box<dyn Error>> {
 		} else {
 			for (khaos_key, pods) in grouped_pods.iter().take(num_attacks as usize) {
 				let pods_to_delete = match mode {
-					DeleteMode::Fixed { number_of_pods: value } => value as f32,
-					DeleteMode::Percentage { percentage_of_pods: value } => (pods.len() * value) as f32 / 100.0,
-					DeleteMode::FixedLeft { number_of_pods_left_after_chaos: value } => max(0, pods.len() - value) as f32,
+					DeleteMode::Fixed { number_of_pods } => number_of_pods as f32,
+					DeleteMode::Percentage { percentage_of_pods } => (pods.len() * percentage_of_pods) as f32 / 100.0,
+					DeleteMode::FixedLeft { number_of_pods_left_after_chaos } => max(0, pods.len() - number_of_pods_left_after_chaos) as f32,
 				};
 
 				let pods_to_delete = if random {

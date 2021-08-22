@@ -1,10 +1,8 @@
 ![khaos-monkey](./images/khaos-monkey-02.png)
 
 # A simple Chaos Monkey for Kubernetes
-Built on top of [kube-rs](https://github.com/kube-rs/kube-rs)
 
 * [Why would you need this monkey?](#why-would-you-need-this-monkey)
-* [How is this monkey different from similar tools?](#how-is-this-monkey-different-from-similar-tools)
 * [3 Modes](#3-modes)
 * [Pod Targeting](#pod-targeting)
 * [Randomness](#randomness)
@@ -14,11 +12,20 @@ Built on top of [kube-rs](https://github.com/kube-rs/kube-rs)
 
 # Why would you need this monkey?
 
-Read about Chaos Engineering
+[Chaos Engineering](https://principlesofchaos.org/) is the discipline of experimenting on a system in order to build confidence in the system’s capability to withstand turbulent conditions in production. Netflix created the project called, [*Chaos Monkey*](https://github.com/Netflix/chaosmonkey), in 2011 which kickstarted the Chaos Engineering discipline.
 
-# How is this monkey different from similar tools?
+**khaos-monkey** is simple Chaos monkey built for kubernetes. All it does is randomly terminating pods following specific rules. The project focuses on simplicity, being lightweight and streamlining chaos applied the the workload. *khaos-monkey* is built in rust with [kube-rs](https://github.com/kube-rs/kube-rs).
 
-I created this tools because the tools i found didnt fit my use-case very well. Other tools like [kube-monkey](https://github.com/asobti/kube-monkey) forces you to add labels to every single resource you want the chaos monkey to target. This tool takes another approach and focuses on having equal rules for all pods in a given namespace.
+## How is this monkey different from similar tools?
+
+I created this tools because the tools i found didn't fit my use-case very well. Tools like [kube-monkey](https://github.com/asobti/kube-monkey) forces you to add labels to every single resource you want the chaos monkey to target. **khaos-monkey** takes another approach and focuses on having equal rules for all pods in a given namespace. **khaos-monkey**' main use-case is to target whole namespaces. It is built on the philosophy that all systems/services should be resilient enough that a few "crashes" doesn't result in downtime.
+
+In my experience if you are orchestrating a huge kubernetes cluster and installs a chaos monkey and let it up to the developers to remember to add specific labels to their workload, then they will forget about it. Close to no one will remember to opt-in and therefore we can't have confidence in that the services can withstand basic turbulence/crashes.
+This way kind of "forces" the developer to take an active decision... Choose to opt-out or make sure that my service actually can handle occasional crashes. If inclusion in the chaos targeting is not default... then no one will remember to opt-in and no resilience will be ensured.
+
+This is kind of how they did it at Netflix. Not forcing their "engineers to architect their code in any specific way"[link](https://netflixtechblog.com/netflix-chaos-monkey-upgraded-1d679429be5d), but instead have a chaos monkey that indirectly forces their engineers to built their system resilient enough to survive incidents. 
+
+Another great tool is [litmus](https://litmuschaos.io/) (which i am a huge fan of). It is much more advanced and better suited for big mature infrastructure - but it can be be a bit cumbersome to install and may be overkill for smaller experimental clusters. This monkey is simple to install and is very lightweight.
 
 # 3 Modes
 
@@ -138,11 +145,11 @@ You can test the monkey on your local machine before putting it on kubernetes. I
 
 > Note: The default settings not target any namespaces, so it won't start killing pods until you specify namespaces to target or you make pods opt-in.
 
-### Create the namespace:
+## Create the namespace:
 ```bash
 $ kubectl create namespace khaos-monkey
 ```
-### Create the right permission with rbac:
+## Create the right permission with rbac:
 
 Either by referring to the repo file:
 ```bash
@@ -175,7 +182,7 @@ roleRef:
 EOF
 ```
 
-### Deploy the monkey
+## Deploy the monkey
 
 > Feel free to tune the numbers yourself. Remember that the monkey may kill it self if it exist inside a targeted namespace and does not not [opt-out](#Opt-out). It is possible to run multiple instances of the monkey with different settings. 
 
@@ -212,7 +219,7 @@ spec:
 EOF
 ```
 
-### Verify that the Khaos Monkey work
+## Verify that the Khaos Monkey is setup correctly
 Run the following command to verify that the monkey works as expected. 
 ```bash
 $ kubectl wait -A --for=condition=ready pod -l "app=khaos-monkey" && kubectl logs -l app=khaos-monkey -n khaos-monkey --follow=true --tail=100
