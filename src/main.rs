@@ -4,6 +4,7 @@ use kube::{
 	api::{Api, DeleteParams, ListParams, ResourceExt},
 	Client,
 };
+use log::{info, log_enabled};
 use rand::prelude::*;
 use std::{
 	cmp::max,
@@ -14,7 +15,6 @@ use std::{
 };
 use structopt::StructOpt;
 use tokio::time::sleep;
-use log::debug;
 
 #[derive(StructOpt)]
 enum DeleteMode {
@@ -61,10 +61,6 @@ struct Opt {
 	/// This specifies a random time interval that will be added to `min-time-between-chaos` each attack. Example: If both options are set to `1m` the attacks will happen with a random time interval between 1 and 2 minutes.
 	#[structopt(long, env, default_value = "1m")]
 	random_extra_time_between_chaos: String,
-
-	/// Log additional details
-	#[structopt(long, env)]
-	debug_mode: bool,
 }
 
 #[tokio::main]
@@ -75,22 +71,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 async fn start() -> Result<(), Box<dyn Error>> {
 	let opt = Opt::from_args();
-	if opt.debug_mode {
-		std::env::set_var("RUST_LOG", "debug,kube=debug");
-	}
 
+	env_logger::init();
 
 	let min_time_between_chaos = parse_duration(&opt.min_time_between_chaos).expect("Failed to parse min-time-between-chaos");
 	let random_extra_time_between_chaos = parse_duration(&opt.random_extra_time_between_chaos).expect("Failed to parse random-time-between-chaos");
 
 	let mode = opt.mode;
 	let random = opt.random_kill_count;
-	let num_attacks = if opt.attacks_per_interval > -1 {
-		opt.attacks_per_interval
-	} else {
-		i32::MAX
-	};
-	let debug_mode = opt.debug_mode;
 
 	let mut rng = rand::thread_rng();
 	let client = Client::try_default().await?;
@@ -102,12 +90,21 @@ async fn start() -> Result<(), Box<dyn Error>> {
 		println!("###################");
 		println!("### Chaos Beginning\n");
 
-		let grouped_pods = get_grouped_pods(&pod_api, &targeted_namespaces, debug_mode).await?;
+		let grouped_pods = get_grouped_pods(&pod_api, &targeted_namespaces).await?;
+
+		let num_attacks = if opt.attacks_per_interval > -1 {
+			opt.attacks_per_interval as usize
+		} else {
+			grouped_pods.len()
+		};
 
 		if grouped_pods.is_empty() {
 			println!("Killed no pods");
 		} else {
-			for (khaos_group_key, pods) in grouped_pods.iter().take(num_attacks as usize) {
+
+			println!("Attacking {} out of {} pod groups\n", num_attacks, grouped_pods.len());
+
+			for (khaos_group_key, pods) in grouped_pods.iter().take(num_attacks) {
 				let pods_to_delete = match mode {
 					DeleteMode::Fixed { number_of_pods } => number_of_pods as f32,
 					DeleteMode::Percentage { percentage_of_pods } => (pods.len() * percentage_of_pods) as f32 / 100.0,
@@ -169,14 +166,14 @@ async fn get_targeted_namespace(
 	Ok(target_namespaces_in_cluster)
 }
 
-async fn get_grouped_pods(pods: &Api<Pod>, targeted_namespaces: &HashSet<String>, debug_mode: bool) -> Result<HashMap<String, Vec<Pod>>, Box<dyn Error>> {
+async fn get_grouped_pods(pods: &Api<Pod>, targeted_namespaces: &HashSet<String>) -> Result<HashMap<String, Vec<Pod>>, Box<dyn Error>> {
 	let mut map: HashMap<String, Vec<Pod>> = HashMap::new();
-	debug!("Logging all pods:");
+	info!("## All pods found:");
 	for pod in pods.list(&ListParams::default()).await? {
 		let in_targeted_namespace = targeted_namespaces.contains(&pod.namespace().unwrap_or_default());
 		let labels = pod.labels();
 
-		debug!("{}", pod.name());
+		info!("- {}", pod.name());
 
 		match (labels.get("khaos-enabled"), in_targeted_namespace) {
 			(None, false) => continue,
@@ -200,17 +197,18 @@ async fn get_grouped_pods(pods: &Api<Pod>, targeted_namespaces: &HashSet<String>
 			}
 		};
 	}
-	debug!("Finished logging pods");
 
-	if debug_mode {
-		debug!("\nLogging all targeted groups:");
+	info!("## \n");
+
+	if log_enabled!(log::Level::Info) {
+		info!("## All targeted groups:");
 		for (group_name, pods) in &map {
-			debug!("{}:", group_name);
+			info!("- {} with {} pods:", group_name, pods.len());
 			for pod in pods {
-				debug!(" - {}", pod.name());
+				info!("  - {}", pod.name());
 			}
 		}
-		debug!("Finished logging targeted groups\n");
+		info!("## \n");
 	}
 
 	Ok(map)
