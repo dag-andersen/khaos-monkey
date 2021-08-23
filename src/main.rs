@@ -128,7 +128,7 @@ async fn start() -> Result<(), Box<dyn Error>> {
 		let wait_time =
 			min_time_between_chaos + Duration::from_secs((random_extra_time_between_chaos.as_secs() as f64 * &rng.gen::<f64>()) as u64);
 
-		println!("Time until next Chaos: {}", format_duration(wait_time));
+		println!("### Time until next Chaos: {}", format_duration(wait_time));
 		println!("###################");
 		println!("");
 

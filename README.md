@@ -14,35 +14,35 @@
 
 [Chaos Engineering](https://principlesofchaos.org/) is the discipline of experimenting on a system in order to build confidence in the system’s capability to withstand turbulent conditions in production. Netflix created the project called, [*Chaos Monkey*](https://github.com/Netflix/chaosmonkey), in 2011 which kickstarted the Chaos Engineering discipline.
 
-**khaos-monkey** is simple Chaos monkey built for kubernetes. All it does is randomly terminating pods following specific rules. The project focuses on simplicity, being lightweight and streamlining chaos applied the the workload. *khaos-monkey* is built in rust with [kube-rs](https://github.com/kube-rs/kube-rs).
+**khaos-monkey** is a simple chaos monkey built for Kubernetes. All it does is randomly terminating pods following specific rules. The project focuses on simplicity, being lightweight, and streamlining chaos applied to the workload. *khaos-monkey* is built in rust with [kube-rs](https://github.com/kube-rs/kube-rs).
 
 ## How is this monkey different from similar tools?
 
-I created this tools because the tools i found didn't fit my use-case very well. Tools like [kube-monkey](https://github.com/asobti/kube-monkey) forces you to add labels to every single resource you want the chaos monkey to target. **khaos-monkey** takes another approach and focuses on having equal rules for all pods in a given namespace. **khaos-monkey**' main use-case is to target whole namespaces. It is built on the philosophy that all systems/services should be resilient enough that a few "crashes" doesn't result in downtime.
+I created this tool because the tools I found didn't fit my use case very well. Tools like [kube-monkey](https://github.com/asobti/kube-monkey) force you to add labels to every single resource you want the chaos monkey to target. **khaos-monkey** takes another approach and focuses on having equal rules for all pods in a given namespace. **khaos-monkey**' main use case is to target whole namespaces. It is built on the philosophy that **all** systems/services should be resilient enough that a few "crashes" doesn't result in downtime.
 
-In my experience if you are orchestrating a huge kubernetes cluster and installs a chaos monkey and let it up to the developers to remember to add specific labels to their workload, then they will forget about it. Close to no one will remember to opt-in and therefore we can't have confidence in that the services can withstand basic turbulence/crashes.
-This way kind of "forces" the developer to take an active decision... Choose to opt-out or make sure that my service actually can handle occasional crashes. If inclusion in the chaos targeting is not default... then no one will remember to opt-in and no resilience will be ensured.
+In my experience, if you are orchestrating a huge Kubernetes cluster and installs a chaos monkey and let it up to the developers to remember to add specific labels to their workload, then they will forget about it. Close to no one will remember to opt-in and therefore we can't have confidence that the services can tolerate random failure/crashes.
+Targeting whole namespaces kind of "forces" the developer to take an active decision... Choose to opt-out or make sure that my system/service can survive occasional crashes. If being chaos targeting is not default... then no one will remember to opt-in and no resilience will be ensured.
 
-This is kind of how they did it at Netflix. Not forcing their "engineers to architect their code in any specific way"[link](https://netflixtechblog.com/netflix-chaos-monkey-upgraded-1d679429be5d), but instead have a chaos monkey that indirectly forces their engineers to built their system resilient enough to survive incidents. 
+This is kind of how they did it at Netflix. Not forcing their "engineers to architect their code in any specific way"[link](https://netflixtechblog.com/netflix-chaos-monkey-upgraded-1d679429be5d), but instead, have a chaos monkey that indirectly forces their engineers to build their system resilient enough to survive incidents. 
 
-Another great tool is [litmus](https://litmuschaos.io/) (which i am a huge fan of). It is much more advanced and better suited for big mature infrastructure - but it can be be a bit cumbersome to install and may be overkill for smaller experimental clusters. This monkey is simple to install and is very lightweight.
+Another great tool is [litmus](https://litmuschaos.io/) (which I am a huge fan of). It is much more advanced and better suited for big mature infrastructure - but it can be a bit cumbersome to install and may be overkill for smaller experimental clusters. This monkey is simple to install and is very lightweight. Running litmus on your local [kind](https://kind.sigs.k8s.io/) or [minikube](https://minikube.sigs.k8s.io/) cluster can be a bit overkill and resource-intensive. 
 
 # 3 Modes
 
 ### Percentage of pods killed
 The monkey will kill a given percentage of targeted pods. The number is rounded down.
 
-> *Example*: if you run the monkey with  `./khoas-monkey percentage 55` and your `ReplicaSet` has 4 pods the monkey will kill 2 random pods on every attack.
+> *Example*: if you run the monkey with `./khoas-monkey percentage 55` and your `ReplicaSet` has 4 pods the monkey will kill 2 random pods on every attack.
 
 ### Fixed number of pods killed
-If set to `fixed` they will kill a fixed number of pods each type.
+If set to `fixed` they will kill a fixed number of pods in a ReplicaSet.
 
-> *Example*: if you run the monkey with  `./khoas-monkey fixed 3` and your `ReplicaSet` has 5 pods the monkey will kill 3 random pods on every attack.
+> *Example*: if you run the monkey with `./khoas-monkey fixed 3` and your `ReplicaSet` has 5 pods the monkey will kill 3 random pods on every attack.
 
 ### Fixed number of pods left
 If set to `fixed_left` they will kill all pod types until there is a fixed number of pods left.
 
-> *Example*: if you run the monkey with `./khoas-monkey fixed-left 3` and your `ReplicaSet` has 5 pods the monkey will kill pods until there is 3 left. In this case it would kill 2 pods.
+> *Example*: if you run the monkey with `./khoas-monkey fixed-left 3` and your `ReplicaSet` has 5 pods the monkey will kill pods until there are 3 left. In this case, it would kill 2 pods.
 
 # Pod Targeting
 
@@ -54,7 +54,7 @@ The monkey can either target individual pods or whole namespaces. If the option 
 
 ## Opt-in
 
-This feature means you can make the monkey target individual pod in any namespace by adding the label `khaos-enabled: "true"` to to the pod. If this label exist on a pod it doesn't matter if it inside in the namespaces specified by `--target-namespaces` or not. 
+This feature means you can make the monkey target individual pod in any namespace by adding the label `khaos-enabled: "true"` to to the pod. If this label exists on a pod it doesn't matter if it is inside in the namespaces specified by `--target-namespaces` or not. 
 
 *Opt-in deployment example*:
 ```yaml
@@ -75,9 +75,9 @@ spec:
 
 ## Opt-out
 
-This feature means you can make the monkey to target on all pods in specific namespaces and choose which pods you want to be excluded in those namespaces. All pods with the label `khaos-enabled: false` will opt-out and will be excluded in the pod targeting by the monkey.
+This feature means you can make the monkey target on all pods in specific namespaces and choose which pods you want to be excluded in those namespaces. All pods with the label `khaos-enabled: false` will opt-out and will be excluded in the pod targeting by the monkey.
 
-> *Example*: The monkey is targeting `namespaceA` and `podA` exist inside that namespace. If the pod has the label `khaos-enabled: false` it will be ignored by the monkey and not killed - if it does not have that label it will be targeted by the monkey (and eventually be killed). 
+> *Example*: The monkey is targeting `namespaceA`. `podA` inside namespace `namespaceA`. If the pod has the label `khaos-enabled: false` it will be ignored by the monkey and not killed - if it does not have that label it will be targeted by the monkey (and eventually be killed). 
 
 *Opt-out Example*:
 ```yaml
@@ -98,10 +98,10 @@ spec:
 
 ## Target Grouping
 
-By default all pods in a `ReplicaSet` is grouped. So if a `Deployment` has `4` replicas the monkey may kill *x* pods of those replicas. 
+By default, all pods in a `ReplicaSet` are grouped. So if a `Deployment` has `4` replicas the monkey may kill *x* pods of those replicas. 
 You can make a custom group by adding a label to the pods - e.g. `khaos-group=my-group`. This would make the monkey treat your custom group the same way it treats a `ReplicaSet`. 
 
-> *Example*: Lets say that deployment `depA` has 2 pods/replicas and deployment `depB` has 1 pod/replicas and all 3 pods/replicas has the label `khaos-group=my-group`. The monkey is set to `./khaos-monkey fixed 2`. In this case the monkey will kill either 2 pods of `depA`' pods or 1 pod from each deployment, since they are treated as being in the same group.
+> *Example*: Let's say that deployment `depA` have 2 pods/replicas and deployment `depB` has 1 pod/replicas and all 3 pods/replicas has the label `khaos-group=my-group`. The monkey is set to `./khaos-monkey fixed 2`. In this case, the monkey will kill either 2 pods of `depA`' pods or 1 pod from each deployment since they are treated as being in the same group.
 
 *deployment example*:
 ```yaml
@@ -133,17 +133,15 @@ You can specify namespaces where it is not possible to [opt-in](#opt-in).
 You can randomize how often the attack happens and how many pods are killed each attack.
 
 You can set `random-kill-count` to `true` if you want the monkey to kill a random amount of pods between 0 and the specified value for that mode.
-> *Example*: If the monkey run with `./khaos-monkey --random-kill-count=true percentage 50` then the monkey will kill between `0` and `50` percent of the pods in each `ReplicaSet`.
+> *Example*: If the monkey runs with `./khaos-monkey --random-kill-count=true percentage 50` then the monkey will kill between `0` and `50` percent of the pods in each `ReplicaSet`.
 
-You can set `random-extra-time-between-chaos` to `5m` if you want you want to add additional random time between each attack.
-> *Example*: If the monkey run with `--min-time-between-chaos=1m --random-extra-time-between-chaos=1m` the attacks will happen with a random time interval between 1 and 2 minutes.
+You can set `random-extra-time-between-chaos` to `5m` if you want to add additional random time between each attack.
+> *Example*: If the monkey runs with `--min-time-between-chaos=1m --random-extra-time-between-chaos=1m` the attacks will happen with a random time interval between 1 and 2 minutes.
 
 # Running/Testing on local machine
-You can test the monkey on your local machine before putting it on kubernetes. If you have your kube-config installed in `~/.kube/config` and have `cargo` installed then you can just pull the repo and run `cargo run -- --target-namespaces="my-namespace" fixed 1` in the repo root. If your config and permissions are correct the monkey will starting killing pods in namespace, "my-namespace", on the current `kubectl` context.
+You can test the monkey on your local machine before putting it on Kubernetes. If you have your kube-config installed in `~/.kube/config` and have `cargo` installed then you can just pull the repo and run `cargo run -- --target-namespaces="my-namespace" fixed 1` in the repo root. If your config and permissions are correct the monkey will start killing pods in namespace, "my-namespace", on the current `kubectl` context.
 
 # Installation
-
-> Note: The default settings not target any namespaces, so it won't start killing pods until you specify namespaces to target or you make pods opt-in.
 
 ## Create the namespace:
 ```bash
@@ -151,11 +149,7 @@ $ kubectl create namespace khaos-monkey
 ```
 ## Create the right permission with rbac:
 
-Either by referring to the repo file:
-```bash
-$ kubectl apply -f https://raw.githubusercontent.com/DagBAndersen/khaos-monkey/main/kube-manifests/rbac.yml
-```
-or copy-paste and run this in your terminal:
+Copy-paste and run this in your terminal:
 ```yaml
 cat <<EOF | kubectl apply -f -
 apiVersion: rbac.authorization.k8s.io/v1
@@ -184,13 +178,9 @@ EOF
 
 ## Deploy the monkey
 
-> Feel free to tune the numbers yourself. Remember that the monkey may kill it self if it exist inside a targeted namespace and does not not [opt-out](#Opt-out). It is possible to run multiple instances of the monkey with different settings. 
+> Feel free to tune the numbers yourself. Remember that the monkey may kill itself if it exists inside a targeted namespace and does not [opt-out](#Opt-out). It is possible to run multiple instances of the monkey with different settings. 
 
-Either by referering to the repo file:
-```bash
-$ kubectl apply -f https://raw.githubusercontent.com/DagBAndersen/khaos-monkey/main/kube-manifests/monkey-deployment.yml
-```
-or copy-paste and run this in your terminal:
+Copy-paste and run this in your terminal:
 
 ```yaml
 cat <<EOF | kubectl apply -f -
@@ -216,6 +206,9 @@ spec:
       - name: khaos-monkey
         image: dagandersen/khaos-monkey:v0.1.0
         args: ["fixed", "1" ]
+        envs:
+          name: TARGET_NAMESPACES
+          value: "default"
 EOF
 ```
 
@@ -240,10 +233,50 @@ Monkey will target: {}
 Killed no pods
 
 ### Chaos over
-Time until next Chaos: 1m 42s
+### Time until next Chaos: 1m 42s
 ###################
 
 ...
+```
+
+## Target a namespace
+
+Copy-paste and run this in your terminal to update the deployment from previous steps:
+```yaml
+cat <<EOF | kubectl apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: khaos-monkey
+  name: khaos-monkey
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: khaos-monkey
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        khaos-enabled: "false"
+        app: khaos-monkey
+    spec:
+      containers:
+      - name: khaos-monkey
+        image: dagandersen/khaos-monkey:v0.1.0
+        args: ["fixed", "1" ]
+        envs:
+        - name: TARGET_NAMESPACES
+          value: "default"
+EOF
+```
+
+Now the monkey will start killing `1` pod of a random ReplicaSet (or custom [`chaos-group`](#target-grouping)) in the `default` namespace every 1-2 minutes.
+
+Read the logs again and see the pods getting killed (if there are any in that namespace):
+```bash
+$ kubectl logs -l app=khaos-monkey -n khaos-monkey --follow=true --tail=100
 ```
 
 # CLI Options
