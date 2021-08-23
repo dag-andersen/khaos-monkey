@@ -14,6 +14,7 @@ use std::{
 };
 use structopt::StructOpt;
 use tokio::time::sleep;
+use log::debug;
 
 #[derive(StructOpt)]
 enum DeleteMode {
@@ -25,7 +26,7 @@ enum DeleteMode {
 	FixedLeft {
 		number_of_pods_left_after_chaos: usize,
 	},
-	/// Kill a percentage of each pod group
+	/// Kill a percentage of each pod group (rounded down)
 	Percentage {
 		percentage_of_pods: usize,
 	},
@@ -57,21 +58,27 @@ struct Opt {
 	#[structopt(long, env, default_value = "1m")]
 	min_time_between_chaos: String,
 
-	/// This specifies a random time interval that will be added to `min-time-between-chaos` each attack. Example: If both options are sat to `1m` the attacks will happen with a random time interval between 1 and 2 minutes.
+	/// This specifies a random time interval that will be added to `min-time-between-chaos` each attack. Example: If both options are set to `1m` the attacks will happen with a random time interval between 1 and 2 minutes.
 	#[structopt(long, env, default_value = "1m")]
 	random_extra_time_between_chaos: String,
+
+	/// Log additional details
+	#[structopt(long, env)]
+	debug_mode: bool,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-	std::env::set_var("RUST_LOG", "info,kube=debug");
-
 	start().await?;
 	Ok(())
 }
 
 async fn start() -> Result<(), Box<dyn Error>> {
 	let opt = Opt::from_args();
+	if opt.debug_mode {
+		std::env::set_var("RUST_LOG", "debug,kube=debug");
+	}
+
 
 	let min_time_between_chaos = parse_duration(&opt.min_time_between_chaos).expect("Failed to parse min-time-between-chaos");
 	let random_extra_time_between_chaos = parse_duration(&opt.random_extra_time_between_chaos).expect("Failed to parse random-time-between-chaos");
@@ -81,26 +88,26 @@ async fn start() -> Result<(), Box<dyn Error>> {
 	let num_attacks = if opt.attacks_per_interval > -1 {
 		opt.attacks_per_interval
 	} else {
-		10000
+		i32::MAX
 	};
+	let debug_mode = opt.debug_mode;
 
 	let mut rng = rand::thread_rng();
 	let client = Client::try_default().await?;
 
 	let pod_api: Api<Pod> = Api::all(client.clone());
-	let targeted_namespace: HashSet<String> = get_targeted_namespace(&opt.target_namespaces, &opt.blacklisted_namespaces, &client).await?;
+	let targeted_namespaces: HashSet<String> = get_targeted_namespace(&opt.target_namespaces, &opt.blacklisted_namespaces, &client).await?;
 
 	loop {
 		println!("###################");
-		println!("### Chaos Beginning");
-		println!("");
+		println!("### Chaos Beginning\n");
 
-		let grouped_pods = get_grouped_pods(&pod_api, &targeted_namespace).await?;
+		let grouped_pods = get_grouped_pods(&pod_api, &targeted_namespaces, debug_mode).await?;
 
 		if grouped_pods.is_empty() {
 			println!("Killed no pods");
 		} else {
-			for (khaos_key, pods) in grouped_pods.iter().take(num_attacks as usize) {
+			for (khaos_group_key, pods) in grouped_pods.iter().take(num_attacks as usize) {
 				let pods_to_delete = match mode {
 					DeleteMode::Fixed { number_of_pods } => number_of_pods as f32,
 					DeleteMode::Percentage { percentage_of_pods } => (pods.len() * percentage_of_pods) as f32 / 100.0,
@@ -111,9 +118,9 @@ async fn start() -> Result<(), Box<dyn Error>> {
 					pods_to_delete * &rng.gen::<f32>()
 				} else {
 					pods_to_delete
-				} as usize;
+				} as u32;
 
-				println!("# Deleting: {}/{} running pods in Khaos Group: {}", pods_to_delete as u32, pods.len(), khaos_key);
+				println!("# Deleting: {}/{} running pods in Khaos Group: {}", pods_to_delete, pods.len(), khaos_group_key);
 
 				let mut pods_clone = pods.clone();
 				pods_clone.shuffle(&mut rng);
@@ -122,15 +129,13 @@ async fn start() -> Result<(), Box<dyn Error>> {
 				}
 			}
 		}
-		println!("");
-		println!("### Chaos over");
+		println!("\n### Chaos over");
 
 		let wait_time =
 			min_time_between_chaos + Duration::from_secs((random_extra_time_between_chaos.as_secs() as f64 * &rng.gen::<f64>()) as u64);
 
 		println!("### Time until next Chaos: {}", format_duration(wait_time));
-		println!("###################");
-		println!("");
+		println!("###################\n");
 
 		sleep(wait_time).await;
 	}
@@ -157,20 +162,21 @@ async fn get_targeted_namespace(
 	};
 
 	let namespaces_in_cluster: HashSet<String> = namespace_api.list(&ListParams::default()).await?.iter().map(|n| n.name()).collect();
-	println!("Namespaces found in cluster: {:?}", namespaces_in_cluster);
+	println!("Namespaces found in cluster: {:?}\n", namespaces_in_cluster);
 
-	println!("");
 	let target_namespaces_in_cluster: HashSet<String> =	target_namespaces.intersection(&namespaces_in_cluster).map(|s| String::from(s)).collect();
-	println!("Monkey will target namespace: {:?}", target_namespaces_in_cluster);
-	println!("");
+	println!("Monkey will target namespace: {:?}\n", target_namespaces_in_cluster);
 	Ok(target_namespaces_in_cluster)
 }
 
-async fn get_grouped_pods(pods: &Api<Pod>, targeted_namespace: &HashSet<String>) -> Result<HashMap<String, Vec<Pod>>, Box<dyn Error>> {
+async fn get_grouped_pods(pods: &Api<Pod>, targeted_namespaces: &HashSet<String>, debug_mode: bool) -> Result<HashMap<String, Vec<Pod>>, Box<dyn Error>> {
 	let mut map: HashMap<String, Vec<Pod>> = HashMap::new();
+	debug!("Logging all pods:");
 	for pod in pods.list(&ListParams::default()).await? {
-		let in_targeted_namespace = targeted_namespace.contains(&pod.namespace().unwrap_or_default());
+		let in_targeted_namespace = targeted_namespaces.contains(&pod.namespace().unwrap_or_default());
 		let labels = pod.labels();
+
+		debug!("{}", pod.name());
 
 		match (labels.get("khaos-enabled"), in_targeted_namespace) {
 			(None, false) => continue,
@@ -193,6 +199,18 @@ async fn get_grouped_pods(pods: &Api<Pod>, targeted_namespace: &HashSet<String>)
 				}
 			}
 		};
+	}
+	debug!("Finished logging pods");
+
+	if debug_mode {
+		debug!("\nLogging all targeted groups:");
+		for (group_name, pods) in &map {
+			debug!("{}:", group_name);
+			for pod in pods {
+				debug!(" - {}", pod.name());
+			}
+		}
+		debug!("Finished logging targeted groups\n");
 	}
 
 	Ok(map)
