@@ -8,6 +8,7 @@
 * [Randomness](#randomness)
 * [Running/Testing on local machine](#runningtesting-on-local-machine)
 * [Installation](#installation)
+* [Debugging](#debugging)
 * [CLI Options](#cli-options)
 
 # Why would you need this monkey?
@@ -139,7 +140,11 @@ You can set `random-extra-time-between-chaos` to `5m` if you want to add additio
 > *Example*: If the monkey runs with `--min-time-between-chaos=1m --random-extra-time-between-chaos=1m` the attacks will happen with a random time interval between 1 and 2 minutes.
 
 # Running/Testing on local machine
-You can test the monkey on your local machine before putting it on Kubernetes. If you have your kube-config installed in `~/.kube/config` and have `cargo` installed then you can just pull the repo and run `cargo run -- --target-namespaces="my-namespace" fixed 1` in the repo root. If your config and permissions are correct the monkey will start killing pods in namespace, "my-namespace", on the current `kubectl` context.
+You can test the monkey on your local machine before putting it on Kubernetes. If you have your kube-config installed in `~/.kube/config` and have `cargo` installed then you can just pull the repo and run
+```bash
+$ cargo run -- --target-namespaces="my-namespace" fixed 1
+```
+in the repo root. If your config and permissions are correct the monkey will start killing pods in namespace, "my-namespace", on the current `kubectl` context.
 
 # Installation
 
@@ -207,10 +212,12 @@ spec:
         image: dagandersen/khaos-monkey:v0.1.0
         args: ["fixed", "1" ]
         envs:
-          name: TARGET_NAMESPACES
+        - name: TARGET_NAMESPACES
           value: "default"
 EOF
 ```
+
+Now the monkey will start killing `1` pod of a random ReplicaSet (or custom [`chaos-group`](#target-grouping)) in the `default` namespace every 1-2 minutes.
 
 ## Verify that the Khaos Monkey is setup correctly
 Run the following command to verify that the monkey works as expected. 
@@ -221,47 +228,31 @@ $ kubectl wait -A --for=condition=ready pod -l "app=khaos-monkey" && kubectl log
 The command will print something like this
 
 ```
-target_namespaces from args/env: {}
-blacklisted_namespaces from args/env: {"kube-system", "kube-node-lease", "kube-public"}
-Namespaces found in cluster: {"kube-system", "default", "kube-node-lease", "khaos-monkey", "kube-public", "local-path-storage"}
+target_namespaces from args/env: {"default"}
+blacklisted_namespaces from args/env: {"kube-system", "kube-public", "kube-node-lease"}
+Namespaces found in cluster: {"kube-public", "kube-node-lease", "default", "kube-system", "local-path-storage"}
 
-Monkey will target: {}
+Monkey will target namespace: {"default"}
 
 ###################
 ### Chaos Beginning
 
-Killed no pods
+# Deleting: 1/4 running pods in Khaos Group: pod-template-hash=5b8c759b68
+Deleting Pod: "my-magic-pod-5b8c759b68-2pzxh"
 
 ### Chaos over
-### Time until next Chaos: 1m 42s
+### Time until next Chaos: 1m 32s
 ###################
 
 ...
 ```
 
-## Target a namespace
+# Debugging
 
-Copy-paste and run this in your terminal to update the deployment from previous steps:
-```yaml
-cat <<EOF | kubectl apply -f -
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  namespace: khaos-monkey
-  name: khaos-monkey
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: khaos-monkey
-  strategy:
-    type: Recreate
-  template:
-    metadata:
-      labels:
-        khaos-enabled: "false"
-        app: khaos-monkey
-    spec:
+If you are having trouble figuring out what pods are grouped or why the monkey is not targeting certain pods, then you can run the monkey with the env `RUST_LOG=info`
+
+```yml
+    ...
       containers:
       - name: khaos-monkey
         image: dagandersen/khaos-monkey:v0.1.0
@@ -269,15 +260,31 @@ spec:
         envs:
         - name: TARGET_NAMESPACES
           value: "default"
-EOF
+        - name: RUST_LOG
+          value: "info"
 ```
 
-Now the monkey will start killing `1` pod of a random ReplicaSet (or custom [`chaos-group`](#target-grouping)) in the `default` namespace every 1-2 minutes.
-
-Read the logs again and see the pods getting killed (if there are any in that namespace):
-```bash
-$ kubectl logs -l app=khaos-monkey -n khaos-monkey --follow=true --tail=100
+It will print something like
 ```
+[2021-08-23T17:12:46Z INFO  khaos_monkey] ## All pods found:
+[2021-08-23T17:12:47Z INFO  khaos_monkey] - echo-client-5b8c759b68-5kk6q
+[2021-08-23T17:12:47Z INFO  khaos_monkey] - echo-server-5bfd4768db-6tdjc
+[2021-08-23T17:12:47Z INFO  khaos_monkey] - echo-server-5bfd4768db-g7vwv
+[2021-08-23T17:12:47Z INFO  khaos_monkey] - echo-server-5bfd4768db-khcz5
+[2021-08-23T17:12:47Z INFO  khaos_monkey] - echo-server-5bfd4768db-qkdzx
+...
+
+[2021-08-23T17:12:47Z INFO  khaos_monkey] ## All targeted groups:
+[2021-08-23T17:12:47Z INFO  khaos_monkey] - pod-template-hash=5b8c759b68 with 1 pods:
+[2021-08-23T17:12:47Z INFO  khaos_monkey]   - echo-client-5b8c759b68-5kk6q
+[2021-08-23T17:12:47Z INFO  khaos_monkey] - pod-template-hash=5bfd4768db with 4 pods:
+[2021-08-23T17:12:47Z INFO  khaos_monkey]   - echo-server-5bfd4768db-qkdzx
+[2021-08-23T17:12:47Z INFO  khaos_monkey]   - echo-server-5bfd4768db-khcz5
+[2021-08-23T17:12:47Z INFO  khaos_monkey]   - echo-server-5bfd4768db-g7vwv
+[2021-08-23T17:12:47Z INFO  khaos_monkey]   - echo-server-5bfd4768db-6tdjc
+...
+```
+
 
 # CLI Options
 
