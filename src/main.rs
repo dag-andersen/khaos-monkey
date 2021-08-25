@@ -65,14 +65,8 @@ struct Opt {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-	start().await?;
-	Ok(())
-}
-
-async fn start() -> Result<(), Box<dyn Error>> {
-	let opt = Opt::from_args();
-
 	env_logger::init();
+	let opt = Opt::from_args();
 
 	let min_time_between_chaos = parse_duration(&opt.min_time_between_chaos).expect("Failed to parse min-time-between-chaos");
 	let random_extra_time_between_chaos = parse_duration(&opt.random_extra_time_between_chaos).expect("Failed to parse random-time-between-chaos");
