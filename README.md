@@ -13,20 +13,29 @@
 
 # Why would you need this monkey?
 
-[Chaos Engineering](https://principlesofchaos.org/) is the discipline of experimenting on a system in order to build confidence in the system’s capability to withstand turbulent conditions in production. Netflix created the project called, [*Chaos Monkey*](https://github.com/Netflix/chaosmonkey), in 2011 which kickstarted the Chaos Engineering discipline.
+> *TLDR*: khaos-monkey is a simple chaos monkey built for Kubernetes. It terminates grouped pods at random based on shared rules/modes for all workload in selected namespaces. The project focuses on simplicity, being lightweight, and streamlining chaos applied to all workload.
+
+[Chaos Engineering](https://principlesofchaos.org/) is the discipline of experimenting on a system in order to build confidence in the system’s capability to withstand turbulent conditions in production. In 2011, Netflix created the project called, [*Chaos Monkey*](https://github.com/Netflix/chaosmonkey), which kickstarted the Chaos Engineering discipline.
 
 **khaos-monkey** is a simple chaos monkey built for Kubernetes. All it does is randomly terminating pods following specific rules. The project focuses on simplicity, being lightweight, and streamlining chaos applied to the workload. *khaos-monkey* is built in rust with [kube-rs](https://github.com/kube-rs/kube-rs).
 
-## How is this monkey different from similar tools?
+I created this tool because the tools I found didn't fit my use case very well.
 
-I created this tool because the tools I found didn't fit my use case very well. Tools like [kube-monkey](https://github.com/asobti/kube-monkey) force you to add labels to every single resource you want the chaos monkey to target. **khaos-monkey** takes another approach and focuses on having equal rules for all pods in a given namespace. **khaos-monkey**' main use case is to target whole namespaces. It is built on the philosophy that **all** systems/services should be resilient enough that a few "crashes" doesn't result in downtime.
-
-In my experience, if you are orchestrating a huge Kubernetes cluster and installs a chaos monkey and let it up to the developers to remember to add specific labels to their workload, then they will forget about it. Close to no one will remember to opt-in and therefore we can't have confidence that the services can tolerate random failure/crashes.
-Targeting whole namespaces kind of "forces" the developer to take an active decision... Choose to opt-out or make sure that my system/service can survive occasional crashes. If getting targeted by chaos is not default then no one will remember to opt-in and no resilience will be ensured.
+In my experience, if you are orchestrating a huge Kubernetes cluster and installs a chaos monkey and let it up to the developers to remember to add specific labels to their workload, then they will forget about it. Close to no one will remember to opt-in and therefore you can't have confidence that the services can tolerate random failure/crashes.
+Targeting whole namespaces kind of "forces" the developer to make an active decision... Choose to opt-out or make sure that my system/service can survive occasional crashes. If getting targeted by chaos is not default then no one will remember to opt-in and no resilience will be ensured.
 
 This is kind of how they did it at Netflix. Not forcing their "engineers to architect their code in any specific way"[link](https://netflixtechblog.com/netflix-chaos-monkey-upgraded-1d679429be5d), but instead, have a chaos monkey that indirectly forces their engineers to build their system resilient enough to survive incidents. 
 
-Another great tool is [litmus](https://litmuschaos.io/) (which I am a huge fan of). It is much more advanced and better suited for big mature infrastructure - but it can be a bit cumbersome to install and may be overkill for smaller experimental clusters. This monkey is simple to install and is very lightweight. Running litmus on your local [kind](https://kind.sigs.k8s.io/) or [minikube](https://minikube.sigs.k8s.io/) cluster can be a bit overkill and resource-intensive. 
+## How is this monkey different from similar tools?
+
+**kube-monkey**
+Tools like [kube-monkey](https://github.com/asobti/kube-monkey) compel you to add labels to every single resource you want the chaos monkey to target. **khaos-monkey** takes another approach and focuses on having equal rules for all pods in a given namespace. The main use case of **khaos-monkey**' is to target whole namespaces. **khaos-monkey** is built on the philosophy that **all** systems/services should be resilient enough that a few "crashes" do not result in downtime.
+
+**chaoskube**
+[chaoskube](https://github.com/linki/chaoskube) is a great tool! chaoskube is probably the most similar tool to **khaos-monkey**. chaoskube has more ways of selecting pods, which is nice. This repo differentiates itself from this tool by having multiple modes. chaoskube is fixed in the mode I call ["fixed 1"](#fixed-number-of-pods-killed). chaoskube sees all pods as equal - it doesn't matter if there are 100 replicas of a given deployment and only 1 of another... the likely hood of hitting each pod is the same. **khaos-monkey** tries to group pods in deployments, so the number of deleted pods depends on the replica number of each deployment. 
+
+**litmus**
+Another great tool is [litmus](https://litmuschaos.io/) (which I am a huge fan of). Litmus is much more advanced and better suited for big mature infrastructure - but it can be a bit cumbersome to install and may be overkill for smaller experimental clusters. This monkey is simple to install and is very lightweight. Running litmus on your local [kind](https://kind.sigs.k8s.io/) or [minikube](https://minikube.sigs.k8s.io/) cluster can be a bit overkill and resource-intensive. 
 
 # 3 Modes
 
@@ -183,8 +192,6 @@ EOF
 
 ## Deploy the monkey
 
-> Feel free to tune the numbers yourself. Remember that the monkey may kill itself if it exists inside a targeted namespace and does not [opt-out](#Opt-out). It is possible to run multiple instances of the monkey with different settings. 
-
 Copy-paste and run this in your terminal:
 
 ```yaml
@@ -218,6 +225,8 @@ EOF
 ```
 
 Now the monkey will start killing `1` pod of a random ReplicaSet (or custom [`chaos-group`](#target-grouping)) in the `default` namespace every 1-2 minutes.
+
+> Feel free to tune the numbers yourself. Remember that the monkey may kill itself if it exists inside a targeted namespace and does not [opt-out](#Opt-out). It is possible to run multiple instances of the monkey with different settings. 
 
 ## Verify that the Khaos Monkey is setup correctly
 Run the following command to verify that the monkey works as expected. 
