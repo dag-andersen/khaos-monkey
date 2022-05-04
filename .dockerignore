@@ -4,3 +4,6 @@ Makefile
 Dockerfile
 .gitignore
 README.md
+.vscode/*
+.git/*
+.github/*
