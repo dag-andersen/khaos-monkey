@@ -218,7 +218,7 @@ spec:
       - name: khaos-monkey
         image: dagandersen/khaos-monkey:v0.1.0
         args: ["fixed", "1" ]
-        envs:
+        env:
         - name: TARGET_NAMESPACES
           value: "default"
 EOF
