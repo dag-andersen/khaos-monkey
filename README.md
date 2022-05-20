@@ -266,7 +266,7 @@ If you are having trouble figuring out what pods are grouped or why the monkey i
       - name: khaos-monkey
         image: dagandersen/khaos-monkey:v0.1.0
         args: ["fixed", "1" ]
-        envs:
+        env:
         - name: TARGET_NAMESPACES
           value: "default"
         - name: RUST_LOG
@@ -333,7 +333,7 @@ OPTIONS:
   --target-namespaces <target-namespaces>
       namespaces you want the monkey to target. Example: "namespace1, namespace2". The monkey will target all pods
       in these namespace unless they opt-out
-      [env: TARGET_NAMESPACES=]  [default: default]
+      [env: TARGET_NAMESPACES=]  [default: ""]
 
 SUBCOMMANDS:
   fixed         Kill a fixed number of each pod group
