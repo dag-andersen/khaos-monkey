@@ -39,7 +39,7 @@ struct Opt {
 	mode: DeleteMode,
 
 	/// namespaces you want the monkey to target. Example: "namespace1, namespace2". The monkey will target all pods in these namespace unless they opt-out.
-	#[structopt(long, env, default_value = "")]
+	#[structopt(long, env, default_value = "default")]
 	target_namespaces: String,
 
 	/// namespaces you want the monkey to ignore. Pods running in these namespaces can't be target.
@@ -152,7 +152,7 @@ async fn get_targeted_namespace(
 		panic!("a namespace can't be both in target_namespaces and namespaces_blacklist");
 	};
 
-	let namespaces_in_cluster: HashSet<String> = namespace_api.list(&ListParams::default()).await?.iter().map(|n| n.name()).collect();
+	let namespaces_in_cluster: HashSet<String> = namespace_api.list(&ListParams::default()).await?.iter().map(|n| n.name_any()).collect();
 	println!("Namespaces found in cluster: {:?}\n", namespaces_in_cluster);
 
 	let target_namespaces_in_cluster: HashSet<String> =	target_namespaces.intersection(&namespaces_in_cluster).map(|s| String::from(s)).collect();
@@ -167,7 +167,7 @@ async fn get_grouped_pods(pods: &Api<Pod>, targeted_namespaces: &HashSet<String>
 		let in_targeted_namespace = targeted_namespaces.contains(&pod.namespace().unwrap_or_default());
 		let labels = pod.labels();
 
-		info!("- {}", pod.name());
+		info!("- {}", pod.name_any());
 
 		match (labels.get("khaos-enabled"), in_targeted_namespace) {
 			(None, false) => continue,
@@ -199,7 +199,7 @@ async fn get_grouped_pods(pods: &Api<Pod>, targeted_namespaces: &HashSet<String>
 		for (group_name, pods) in &map {
 			info!("- {} with {} pods:", group_name, pods.len());
 			for pod in pods {
-				info!("  - {}", pod.name());
+				info!("  - {}", pod.name_any());
 			}
 		}
 		info!("## \n");
@@ -210,9 +210,9 @@ async fn get_grouped_pods(pods: &Api<Pod>, targeted_namespaces: &HashSet<String>
 
 async fn delete_pod(client: Client, pod: &Pod) -> Result<(), Box<dyn Error>> {
 	let api: Api<Pod> = Api::namespaced(client, &pod.namespace().unwrap());
-	api.delete(&pod.name(), &DeleteParams::default())
+	api.delete(&pod.name_any(), &DeleteParams::default())
 		.await?
-		.map_left(|o| println!("Deleting Pod: {:?}", o.name()))
+		.map_left(|o| println!("Deleting Pod: {:?}", o.name_any()))
 		.map_right(|s| println!("Deleted Pod: {:?}", s));
 	Ok(())
 }
