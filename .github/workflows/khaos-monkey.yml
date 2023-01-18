@@ -47,4 +47,4 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: latest, dagandersen/khaos-monkey:${{ env.APP-VERSION }}
+          tags: dagandersen/khaos-monkey:latest, dagandersen/khaos-monkey:${{ env.APP-VERSION }}
