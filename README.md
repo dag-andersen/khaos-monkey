@@ -216,7 +216,7 @@ spec:
     spec:
       containers:
       - name: khaos-monkey
-        image: dagandersen/khaos-monkey:v0.1.0
+        image: dagandersen/khaos-monkey:latest
         args: ["fixed", "1" ]
         env:
         - name: TARGET_NAMESPACES
@@ -264,7 +264,7 @@ If you are having trouble figuring out what pods are grouped or why the monkey i
     ...
       containers:
       - name: khaos-monkey
-        image: dagandersen/khaos-monkey:v0.1.0
+        image: dagandersen/khaos-monkey:latest
         args: ["fixed", "1" ]
         env:
         - name: TARGET_NAMESPACES
